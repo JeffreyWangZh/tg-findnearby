@@ -3,54 +3,69 @@
 @tailwind utilities;
 
 @layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
-    @apply bg-tg-bg text-tg-text antialiased min-h-screen selection:bg-tg-link selection:bg-opacity-20;
+    @apply bg-tg-bg text-tg-text antialiased min-h-screen;
+    font-feature-settings: "kern" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply backdrop-blur-md border border-white/10 rounded-2xl shadow-xl transition-all duration-300;
+    @apply backdrop-blur-md border border-white/10 rounded-2xl shadow-lg transition-all duration-300;
     background-color: var(--tg-theme-secondary-bg-color, rgba(240, 240, 240, 0.6));
   }
   
   .tg-input {
-    @apply w-full px-4 py-3 border border-transparent rounded-xl outline-none transition-all;
+    @apply w-full px-4 py-3.5 border border-transparent rounded-xl outline-none transition-all text-base;
     background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
     color: var(--tg-theme-text-color, #000);
   }
   .tg-input:focus {
     border-color: var(--tg-theme-link-color, #2481cc);
+    box-shadow: 0 0 0 3px rgba(36, 129, 204, 0.1);
+  }
+  .tg-input::placeholder {
+    @apply text-sm;
+    color: var(--tg-theme-hint-color, #999);
   }
   
   .tg-button {
-    @apply w-full px-6 py-4 font-semibold rounded-2xl active:scale-95 transition-all shadow-lg uppercase tracking-wide;
+    @apply w-full px-6 py-4 font-bold rounded-2xl active:scale-[0.97] transition-all shadow-lg tracking-wider text-base;
     background-color: var(--tg-theme-button-color, #3390ec);
     color: var(--tg-theme-button-text-color, #ffffff);
   }
   
   .step-indicator {
-    @apply h-1.5 flex-1 rounded-full overflow-hidden;
-    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    @apply h-1 flex-1 rounded-full overflow-hidden;
+    background-color: var(--tg-theme-secondary-bg-color, #e8e8e8);
   }
   
   .step-indicator-active {
     @apply h-full transition-all duration-500;
     background-color: var(--tg-theme-link-color, #2481cc);
   }
+  
+  .label-text {
+    @apply text-xs font-bold text-tg-hint tracking-wider pl-1 mb-1.5 block;
+  }
 }
 
-/* Custom scrollbar for premium feel */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 3px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(112, 117, 121, 0.3);
+  background: rgba(112, 117, 121, 0.25);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(112, 117, 121, 0.5);
+  background: rgba(112, 117, 121, 0.45);
 }

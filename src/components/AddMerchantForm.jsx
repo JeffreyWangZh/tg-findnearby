@@ -1,18 +1,21 @@
 import { useState, useRef } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { Plus, MapPin, Camera, UserPlus, ArrowRight, ArrowLeft, Trash2 } from 'lucide-react'
+import { Plus, MapPin, Camera, UserPlus, ArrowRight, ArrowLeft, Trash2, Loader2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import clsx from 'clsx'
 import { supabase } from '../lib/supabase'
 
 const STEPS = [
-  { title: "Basic Information", subtitle: "Provide business details", icon: Plus },
-  { title: "Contact Hub", subtitle: "Connect merchant socials", icon: UserPlus },
-  { title: "Visual Showcase", subtitle: "Photos and videos", icon: Camera },
-  { title: "Locate Point", subtitle: "Precision on the map", icon: MapPin },
+  { title: "基本信息", subtitle: "填写商户的基础资料", icon: Plus },
+  { title: "联系方式", subtitle: "关联老板的 Telegram 账号", icon: UserPlus },
+  { title: "上传照片", subtitle: "展示商户的实景风貌", icon: Camera },
+  { title: "标记位置", subtitle: "在地图上精准定位", icon: MapPin },
 ]
 
-const CATEGORIES = ["Restaurant", "Cafe", "Retail", "Services", "Wellness", "Art & Design", "Technology"];
+const CATEGORIES = [
+  "餐饮美食", "咖啡茶饮", "零售购物", 
+  "生活服务", "美容健身", "教育培训", "科技互联"
+];
 
 export default function AddMerchantForm({ onFinish }) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -72,18 +75,16 @@ export default function AddMerchantForm({ onFinish }) {
   }
 
   const handleFinalSubmit = () => {
-    WebApp.showConfirm("Are you sure you want to submit this merchant?", async (confirmed) => {
+    WebApp.showConfirm("确认提交该商户信息吗？", async (confirmed) => {
       if (!confirmed) return;
       
       setSubmitting(true);
       try {
-        // Upload media files
         let mediaUrls = [];
         if (formData.media.length > 0) {
           mediaUrls = await uploadMedia();
         }
 
-        // Insert merchant into Supabase
         const { error } = await supabase.from('merchants').insert({
           name: formData.name,
           category: formData.category,
@@ -98,16 +99,16 @@ export default function AddMerchantForm({ onFinish }) {
         if (error) throw error;
 
         WebApp.showPopup({ 
-          title: 'Success!', 
-          message: 'Your merchant submission is pending review.',
-          buttons: [{ type: 'ok', text: 'Awesome' }]
+          title: '提交成功 🎉', 
+          message: '商户信息正在审核中，我们会尽快处理。',
+          buttons: [{ type: 'ok', text: '好的' }]
         });
         onFinish();
       } catch (err) {
         console.error('Submit error:', err);
         WebApp.showPopup({ 
-          title: 'Error', 
-          message: 'Failed to submit. Please try again.',
+          title: '提交失败', 
+          message: '网络异常，请稍后重试。',
           buttons: [{ type: 'ok' }]
         });
       } finally {
@@ -116,11 +117,16 @@ export default function AddMerchantForm({ onFinish }) {
     });
   }
 
+  const isStepValid = () => {
+    if (currentStep === 0) return formData.name.trim() && formData.category;
+    return true;
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Step Header */}
-      <div className="flex gap-2">
-        {STEPS.map((step, idx) => (
+    <div className="space-y-5">
+      {/* Step Progress */}
+      <div className="flex gap-1.5">
+        {STEPS.map((_, idx) => (
           <div key={idx} className="step-indicator">
             <div 
               className={clsx(
@@ -132,49 +138,53 @@ export default function AddMerchantForm({ onFinish }) {
         ))}
       </div>
 
-      <div className="px-2">
-         <h2 className="text-2xl font-black text-tg-text uppercase tracking-tight flex items-center gap-2">
-           <span className="text-tg-link italic">0{currentStep + 1}.</span> {STEPS[currentStep].title}
-         </h2>
-         <p className="text-sm text-tg-hint font-medium leading-relaxed">{STEPS[currentStep].subtitle}</p>
+      {/* Step Title */}
+      <div className="px-1">
+         <div className="flex items-baseline gap-2">
+           <span className="text-2xl font-black text-tg-link">{currentStep + 1}</span>
+           <span className="text-lg font-black text-tg-text">{STEPS[currentStep].title}</span>
+         </div>
+         <p className="text-sm text-tg-hint mt-0.5">{STEPS[currentStep].subtitle}</p>
       </div>
 
+      {/* Step Content */}
       <AnimatePresence mode="wait">
         <motion.div 
           key={currentStep}
           initial={{ opacity: 0, x: 10 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -10 }}
-          className="glass-card p-6 space-y-5"
+          transition={{ duration: 0.2 }}
+          className="glass-card p-5 space-y-4"
         >
           {currentStep === 0 && (
             <>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-tg-hint uppercase tracking-widest pl-1">Business Name</label>
+              <div>
+                <label className="label-text">商户名称</label>
                 <input 
                   type="text" 
-                  placeholder="e.g., The Cozy Corner" 
+                  placeholder="例如：街角咖啡馆" 
                   className="tg-input"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-tg-hint uppercase tracking-widest pl-1">Category</label>
+              <div>
+                <label className="label-text">经营类目</label>
                 <select 
                   className="tg-input appearance-none"
                   value={formData.category}
                   onChange={(e) => setFormData({...formData, category: e.target.value})}
                 >
-                  <option value="">Select Category</option>
+                  <option value="">请选择类目</option>
                   {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-tg-hint uppercase tracking-widest pl-1">Physical Address</label>
+              <div>
+                <label className="label-text">详细地址</label>
                 <textarea 
-                  rows={3} 
-                  placeholder="Street, City, Building..." 
+                  rows={2} 
+                  placeholder="街道、楼栋、门牌号..." 
                   className="tg-input resize-none"
                   value={formData.address}
                   onChange={(e) => setFormData({...formData, address: e.target.value})}
@@ -184,19 +194,21 @@ export default function AddMerchantForm({ onFinish }) {
           )}
 
           {currentStep === 1 && (
-            <div className="space-y-5">
-              <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-500">
-                 <p className="text-xs font-bold uppercase tracking-wide">Direct Integration</p>
-                 <p className="text-[11px] leading-relaxed mt-0.5 opacity-80">Linking the owner enables "Contact Boss" features for users.</p>
+            <div className="space-y-4">
+              <div className="p-3.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                 <p className="text-xs font-bold text-emerald-600">💬 Telegram 直连</p>
+                 <p className="text-xs text-emerald-600/70 mt-1 leading-relaxed">
+                   绑定商户老板的 Telegram，用户可以一键联系。
+                 </p>
               </div>
-              <div className="space-y-2">
-                 <label className="text-xs font-bold text-tg-hint uppercase tracking-widest pl-1">Owner's Telegram</label>
+              <div>
+                 <label className="label-text">老板的 Telegram 用户名</label>
                  <div className="relative">
-                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-tg-hint font-medium">t.me/</div>
+                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-tg-hint text-sm font-medium">t.me/</div>
                    <input 
                     type="text" 
-                    placeholder="username" 
-                    className="tg-input pl-[3.8rem]"
+                    placeholder="用户名" 
+                    className="tg-input pl-[4rem]"
                     value={formData.owner_tg}
                     onChange={(e) => setFormData({...formData, owner_tg: e.target.value})}
                   />
@@ -206,10 +218,10 @@ export default function AddMerchantForm({ onFinish }) {
           )}
 
           {currentStep === 2 && (
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2.5">
                 {formData.media.map((item, idx) => (
-                  <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden group border border-white/5 shadow-md">
+                  <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group border border-black/5">
                     {item.type === 'image' ? (
                       <img src={item.url} className="w-full h-full object-cover" />
                     ) : (
@@ -217,18 +229,18 @@ export default function AddMerchantForm({ onFinish }) {
                     )}
                     <button 
                       onClick={() => removeMedia(idx)}
-                      className="absolute top-2 right-2 p-2 bg-rose-500/80 backdrop-blur-md rounded-xl text-white opacity-0 group-hover:opacity-100 transition-all border border-white/20"
+                      className="absolute top-1.5 right-1.5 p-1.5 bg-black/50 backdrop-blur-md rounded-lg text-white active:scale-90 transition-all"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 ))}
                 <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="aspect-square rounded-2xl border-2 border-dashed border-gray-400/30 flex flex-col items-center justify-center gap-2 text-tg-hint hover:border-tg-link hover:text-tg-link transition-all"
+                  className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1.5 text-tg-hint hover:border-tg-link hover:text-tg-link transition-all active:scale-95"
                 >
-                  <Plus size={24} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Add Files</span>
+                  <Plus size={20} />
+                  <span className="text-[9px] font-bold">添加</span>
                 </button>
               </div>
               <input 
@@ -239,48 +251,56 @@ export default function AddMerchantForm({ onFinish }) {
                 accept="image/*,video/*"
                 onChange={handleMediaChange}
               />
-              <p className="text-[10px] text-tg-hint text-center font-medium">Max file size: 20MB. Supports JPG, PNG, MP4.</p>
+              <p className="text-[11px] text-tg-hint text-center">
+                支持 JPG、PNG、MP4，单文件最大 20MB
+              </p>
             </div>
           )}
 
           {currentStep === 3 && (
-            <div className="space-y-5">
-               <div className="aspect-video bg-tg-secondary-bg rounded-2xl flex flex-col items-center justify-center text-tg-hint border border-white/5 relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5" />
-                  <MapPin className="w-8 h-8 opacity-40 group-hover:scale-110 transition-transform" />
-                  <p className="text-[11px] font-bold mt-2 uppercase tracking-tight">Interactive Map Module</p>
+            <div className="space-y-4">
+               <div className="aspect-[16/10] rounded-xl flex flex-col items-center justify-center text-tg-hint border border-black/5 relative overflow-hidden" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f5f5f5)' }}>
+                  <MapPin className="w-7 h-7 opacity-30" />
+                  <p className="text-xs font-bold mt-2 text-tg-hint/60">地图选点模块</p>
                   
-                  <div className="absolute bottom-4 left-4 right-4 p-3 bg-white/80 backdrop-blur-lg rounded-xl border border-white/10 flex justify-between items-center scale-95 opacity-80">
+                  <div className="absolute bottom-3 left-3 right-3 p-3 bg-white/90 backdrop-blur-lg rounded-xl border border-black/5 flex justify-between items-center">
                      <div className="flex items-center gap-2">
                        <div className="w-2 h-2 rounded-full bg-rose-500" />
-                       <span className="text-[10px] font-mono text-tg-text">LAT: {formData.geo.lat}</span>
+                       <span className="text-[11px] font-mono text-tg-text">纬度: {formData.geo.lat}</span>
                      </div>
-                     <span className="text-[10px] font-mono text-tg-text">LNG: {formData.geo.lng}</span>
+                     <span className="text-[11px] font-mono text-tg-text">经度: {formData.geo.lng}</span>
                   </div>
                </div>
-               <button className="w-full py-3 bg-tg-secondary-bg flex items-center justify-center gap-2 rounded-xl text-xs font-bold text-tg-text hover:bg-tg-bg transition-colors border border-white/5">
-                 <Plus size={14} /> Select Exact Location
+               <button className="w-full py-3 flex items-center justify-center gap-2 rounded-xl text-sm font-bold text-tg-link border border-tg-link/20 active:scale-[0.97] transition-all" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f5f5f5)' }}>
+                 <MapPin size={14} /> 选择精确位置
                </button>
             </div>
           )}
         </motion.div>
       </AnimatePresence>
 
-      <div className="flex gap-4 pt-2">
+      {/* Navigation Buttons */}
+      <div className="flex gap-3 pt-1">
         {currentStep > 0 && (
-          <button onClick={prevStep} className="flex-1 py-4 px-6 bg-tg-secondary-bg rounded-2xl text-tg-text font-bold active:scale-95 transition-all text-xs flex items-center justify-center gap-2 border border-white/5">
-            <ArrowLeft size={16} /> Back
+          <button onClick={prevStep} className="flex-1 py-3.5 px-5 rounded-2xl text-tg-text font-bold active:scale-[0.97] transition-all text-sm flex items-center justify-center gap-1.5 border border-black/5" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)' }}>
+            <ArrowLeft size={15} /> 上一步
           </button>
         )}
         <button 
           onClick={nextStep} 
-          disabled={submitting}
+          disabled={submitting || !isStepValid()}
           className={clsx(
-            "flex-[2] py-4 px-6 bg-tg-button text-tg-button-text rounded-2xl font-bold active:scale-95 transition-all shadow-xl text-xs flex items-center justify-center gap-2 uppercase tracking-wide",
-            submitting && "opacity-50 pointer-events-none"
+            "flex-[2] py-3.5 px-5 tg-button flex items-center justify-center gap-1.5 text-sm",
+            (submitting || !isStepValid()) && "opacity-50 pointer-events-none"
           )}
         >
-          {submitting ? 'Submitting...' : (currentStep === STEPS.length - 1 ? 'Publish' : 'Continue')} <ArrowRight size={16} />
+          {submitting ? (
+            <><Loader2 size={16} className="animate-spin" /> 提交中...</>
+          ) : currentStep === STEPS.length - 1 ? (
+            <>提交审核 <ArrowRight size={15} /></>
+          ) : (
+            <>下一步 <ArrowRight size={15} /></>
+          )}
         </button>
       </div>
     </div>

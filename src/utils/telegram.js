@@ -1,37 +1,33 @@
 import WebApp from '@twa-dev/sdk'
 
 /**
- * Opens a direct Telegram chat with the merchant owner.
- * @param {string} ownerPath - Either a username (e.g., 'johndoe') or a full t.me link.
+ * 打开与商户老板的 Telegram 私聊
+ * @param {string} ownerPath - 用户名或完整 t.me 链接
  */
 export const contactMerchantOwner = (ownerPath) => {
   if (!ownerPath) {
     WebApp.showPopup({
-      title: 'Wait!',
-      message: 'This merchant hasn\'t provided a contact yet.',
-      buttons: [{ type: 'ok', text: 'Ok then' }]
+      title: '暂无联系方式',
+      message: '该商户还未提供 Telegram 联系方式。',
+      buttons: [{ type: 'ok', text: '知道了' }]
     });
     return;
   }
 
-  // Ensure it's a valid Telegram URL
   let targetUrl = ownerPath;
   if (!ownerPath.startsWith('http')) {
-    // Strip '@' if provided
     const cleanUsername = ownerPath.replace('@', '');
     targetUrl = `https://t.me/${cleanUsername}`;
   }
 
-  // Technical Requirement: Use Telegram.WebApp.openTelegramLink
   WebApp.openTelegramLink(targetUrl);
 };
 
 /**
- * Compresses an image before upload to save bandwidth in Telegram.
- * Mock implementation of frontend image compression.
+ * 前端图片压缩（上传前节省带宽）
  */
 export const compressImage = async (file) => {
-  console.log(`Compressing ${file.name}...`);
-  // Real implementation would use canvas or a library like 'browser-image-compression'
+  // 实际项目中可使用 browser-image-compression 库
+  console.log(`正在压缩 ${file.name}...`);
   return file; 
 };
