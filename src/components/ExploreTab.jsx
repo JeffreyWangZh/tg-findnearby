@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Target, CheckCircle2, BookmarkPlus, Loader2, Star, Target as TargetIcon } from 'lucide-react';
+import { MapPin, Target, CheckCircle2, Loader2, Star, Target as TargetIcon } from 'lucide-react';
 import clsx from 'clsx';
 import { supabase } from '../lib/supabase';
-import { contactMerchantOwner } from '../utils/telegram';
 
-export default function ExploreTab({ collections, setTag, onAddClick }) {
+export default function ExploreTab({ collections, setTag, onAddClick, onMerchantClick }) {
   const [merchants, setMerchants] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,16 +17,9 @@ export default function ExploreTab({ collections, setTag, onAddClick }) {
     const { data, error } = await supabase
       .from('merchants')
       .select('*')
-      .eq('status', 'approved') // Only show approved ones theoretically, or show all for testing
       .order('created_at', { ascending: false });
 
-    // For demo purposes, if none are approved, fetch all
-    if (!error && data.length > 0) {
-      setMerchants(data);
-    } else {
-      const { data: allData } = await supabase.from('merchants').select('*').order('created_at', { ascending: false });
-      setMerchants(allData || []);
-    }
+    if (!error) setMerchants(data || []);
     setLoading(false);
   };
 
@@ -78,7 +70,7 @@ export default function ExploreTab({ collections, setTag, onAddClick }) {
           <div className="py-12 flex flex-col items-center justify-center text-tg-hint gap-3 border border-dashed border-gray-300 rounded-3xl mx-1 bg-white/50 backdrop-blur" style={{ borderColor: 'var(--tg-theme-secondary-bg-color)'}}>
             <MapPin size={40} className="text-gray-300" />
             <p className="text-sm font-bold text-tg-hint">附近暂无商户</p>
-            <button onClick={onAddClick} className="text-xs font-bold text-blue-500">成第一个推荐的人</button>
+            <button onClick={onAddClick} className="text-xs font-bold text-blue-500">成为第一个推荐的人</button>
           </div>
         ) : (
           merchants.map((merchant) => {
@@ -88,7 +80,8 @@ export default function ExploreTab({ collections, setTag, onAddClick }) {
                 key={merchant.id}
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="glass-card overflow-hidden"
+                className="glass-card overflow-hidden active:scale-[0.98] transition-transform"
+                onClick={() => onMerchantClick(merchant)}
               >
                 {merchant.media_urls?.length > 0 && (
                   <div className="w-full aspect-[2/1] bg-gray-100 relative">
@@ -104,14 +97,14 @@ export default function ExploreTab({ collections, setTag, onAddClick }) {
                 
                 <div className="p-4 space-y-3">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="text-lg font-black text-tg-text leading-tight">{merchant.name}</h4>
-                      <p className="text-xs text-tg-hint mt-1 flex items-center gap-1">
-                        <MapPin size={12} /> {merchant.physical_address}
+                    <div className="flex-1">
+                      <h4 className="text-lg font-black text-tg-text leading-tight truncate">{merchant.name}</h4>
+                      <p className="text-xs text-tg-hint mt-1 flex items-center gap-1 truncate max-w-[90%]">
+                        <MapPin size={12} className="flex-shrink-0" /> {merchant.physical_address}
                       </p>
                     </div>
                     {/* Tag Buttons */}
-                    <div className="flex bg-gray-100 rounded-lg p-1" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)' }}>
+                    <div className="flex bg-gray-100 rounded-lg p-1 flex-shrink-0" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)' }} onClick={e => e.stopPropagation()}>
                       <button 
                         onClick={() => setTag(merchant, '待打卡')}
                         className={clsx(

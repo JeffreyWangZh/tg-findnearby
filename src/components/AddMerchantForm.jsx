@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { Plus, MapPin, Camera, UserPlus, ArrowRight, ArrowLeft, Trash2, Loader2 } from 'lucide-react'
+import { Plus, MapPin, Camera, UserPlus, ArrowRight, ArrowLeft, Trash2, Loader2, AlignLeft } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import clsx from 'clsx'
 import { supabase } from '../lib/supabase'
+import { getCurrentTgUser } from '../utils/telegram'
 
 const STEPS = [
   { title: "基本信息", subtitle: "填写商户的基础资料", icon: Plus },
@@ -24,12 +25,14 @@ export default function AddMerchantForm({ onFinish }) {
     name: '',
     category: '',
     address: '',
+    description: '',
     owner_tg: '',
     media: [],
     geo: { lat: 22.54, lng: 114.05 }
   });
   
   const fileInputRef = useRef(null);
+  const currentUser = getCurrentTgUser();
 
   const nextStep = () => {
     if (currentStep < STEPS.length - 1) setCurrentStep(currentStep + 1);
@@ -89,7 +92,9 @@ export default function AddMerchantForm({ onFinish }) {
           name: formData.name,
           category: formData.category,
           physical_address: formData.address,
+          description: formData.description,
           owner_tg_id: formData.owner_tg,
+          submitter_tg_id: currentUser.id,
           lat: formData.geo.lat,
           lng: formData.geo.lng,
           media_urls: mediaUrls,
@@ -100,7 +105,7 @@ export default function AddMerchantForm({ onFinish }) {
 
         WebApp.showPopup({ 
           title: '提交成功 🎉', 
-          message: '商户信息正在审核中，我们会尽快处理。',
+          message: '商户已被收录，即将可以在发现页查看。',
           buttons: [{ type: 'ok', text: '好的' }]
         });
         onFinish();
@@ -124,21 +129,14 @@ export default function AddMerchantForm({ onFinish }) {
 
   return (
     <div className="space-y-5">
-      {/* Step Progress */}
       <div className="flex gap-1.5">
         {STEPS.map((_, idx) => (
           <div key={idx} className="step-indicator">
-            <div 
-              className={clsx(
-                "step-indicator-active",
-                idx <= currentStep ? "w-full" : "w-0"
-              )}
-            />
+            <div className={clsx("step-indicator-active", idx <= currentStep ? "w-full" : "w-0")} />
           </div>
         ))}
       </div>
 
-      {/* Step Title */}
       <div className="px-1">
          <div className="flex items-baseline gap-2">
            <span className="text-2xl font-black text-tg-link">{currentStep + 1}</span>
@@ -147,7 +145,6 @@ export default function AddMerchantForm({ onFinish }) {
          <p className="text-sm text-tg-hint mt-0.5">{STEPS[currentStep].subtitle}</p>
       </div>
 
-      {/* Step Content */}
       <AnimatePresence mode="wait">
         <motion.div 
           key={currentStep}
@@ -181,13 +178,13 @@ export default function AddMerchantForm({ onFinish }) {
                 </select>
               </div>
               <div>
-                <label className="label-text">详细地址</label>
+                <label className="label-text">商户描述</label>
                 <textarea 
                   rows={2} 
-                  placeholder="街道、楼栋、门牌号..." 
+                  placeholder="店铺特色、招牌推荐（选填）" 
                   className="tg-input resize-none"
-                  value={formData.address}
-                  onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
                 />
               </div>
             </>
@@ -202,12 +199,12 @@ export default function AddMerchantForm({ onFinish }) {
                  </p>
               </div>
               <div>
-                 <label className="label-text">老板的 Telegram 用户名</label>
+                 <label className="label-text">老板的 Telegram 用户名 (选填)</label>
                  <div className="relative">
                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-tg-hint text-sm font-medium">t.me/</div>
                    <input 
                     type="text" 
-                    placeholder="用户名" 
+                    placeholder="username" 
                     className="tg-input pl-[4rem]"
                     value={formData.owner_tg}
                     onChange={(e) => setFormData({...formData, owner_tg: e.target.value})}
@@ -251,35 +248,35 @@ export default function AddMerchantForm({ onFinish }) {
                 accept="image/*,video/*"
                 onChange={handleMediaChange}
               />
-              <p className="text-[11px] text-tg-hint text-center">
-                支持 JPG、PNG、MP4，单文件最大 20MB
-              </p>
             </div>
           )}
 
           {currentStep === 3 && (
             <div className="space-y-4">
+               <div>
+                  <label className="label-text">详细地址</label>
+                  <input 
+                    type="text" 
+                    placeholder="街道、楼栋、门牌号..." 
+                    className="tg-input mb-4"
+                    value={formData.address}
+                    onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  />
+               </div>
                <div className="aspect-[16/10] rounded-xl flex flex-col items-center justify-center text-tg-hint border border-black/5 relative overflow-hidden" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f5f5f5)' }}>
                   <MapPin className="w-7 h-7 opacity-30" />
                   <p className="text-xs font-bold mt-2 text-tg-hint/60">地图选点模块</p>
                   
                   <div className="absolute bottom-3 left-3 right-3 p-3 bg-white/90 backdrop-blur-lg rounded-xl border border-black/5 flex justify-between items-center">
-                     <div className="flex items-center gap-2">
-                       <div className="w-2 h-2 rounded-full bg-rose-500" />
-                       <span className="text-[11px] font-mono text-tg-text">纬度: {formData.geo.lat}</span>
-                     </div>
-                     <span className="text-[11px] font-mono text-tg-text">经度: {formData.geo.lng}</span>
+                     <span className="text-[11px] font-mono text-tg-text">LAT: {formData.geo.lat}</span>
+                     <span className="text-[11px] font-mono text-tg-text">LNG: {formData.geo.lng}</span>
                   </div>
                </div>
-               <button className="w-full py-3 flex items-center justify-center gap-2 rounded-xl text-sm font-bold text-tg-link border border-tg-link/20 active:scale-[0.97] transition-all" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f5f5f5)' }}>
-                 <MapPin size={14} /> 选择精确位置
-               </button>
             </div>
           )}
         </motion.div>
       </AnimatePresence>
 
-      {/* Navigation Buttons */}
       <div className="flex gap-3 pt-1">
         {currentStep > 0 && (
           <button onClick={prevStep} className="flex-1 py-3.5 px-5 rounded-2xl text-tg-text font-bold active:scale-[0.97] transition-all text-sm flex items-center justify-center gap-1.5 border border-black/5" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)' }}>
