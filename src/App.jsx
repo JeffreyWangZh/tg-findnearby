@@ -39,7 +39,7 @@ function App() {
     const fetchLocationName = async () => {
       setCurrentLocationName('定位中...');
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentGeo.lat}&lon=${currentGeo.lng}&zoom=16&addressdetails=1`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentGeo.lat}&lon=${currentGeo.lng}&zoom=16&addressdetails=1&accept-language=zh`);
         const data = await res.json();
         if (data && data.address) {
           const addr = data.address;
