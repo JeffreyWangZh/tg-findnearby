@@ -6,6 +6,7 @@ import ExploreTab from './components/ExploreTab'
 import UserProfile from './components/UserProfile'
 import MerchantProfile from './components/MerchantProfile'
 import { useCollections } from './hooks/useCollections'
+import { isTelegramEnvironment } from './utils/telegram'
 import { motion, AnimatePresence } from 'framer-motion'
 import clsx from 'clsx'
 
@@ -19,8 +20,11 @@ function App() {
   const [activeTab, setActiveTab] = useState('explore');
   const [selectedMerchant, setSelectedMerchant] = useState(null);
   const { collections, setTag } = useCollections();
+  const [isAuthorized, setIsAuthorized] = useState(true);
 
   useEffect(() => {
+    setIsAuthorized(isTelegramEnvironment());
+    
     if (activeTab !== 'explore' || selectedMerchant) {
       WebApp.BackButton.show();
       const handler = () => {
@@ -36,6 +40,23 @@ function App() {
       WebApp.BackButton.hide();
     }
   }, [activeTab, selectedMerchant]);
+
+  if (!isAuthorized) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-gray-50 text-gray-800">
+         <div className="w-20 h-20 mb-6 bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20 transform -rotate-6">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10 ml-1"><path d="M15 10l-4 4l6 6l4-16l-18 7l4 2l2 6l3-4"></path></svg>
+         </div>
+         <h1 className="text-2xl font-black mb-3 text-gray-900 tracking-tight">请在 Telegram 中打开</h1>
+         <p className="text-sm font-medium text-gray-500 mb-8 px-4 leading-relaxed">
+           为保障您的账号和积分安全，<br/>本程序只允许在 Telegram 官方内开启。
+         </p>
+         <button onClick={() => window.location.href='https://t.me/your_bot_username'} className="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold shadow-md shadow-blue-500/20 active:scale-95 transition-transform flex items-center gap-2">
+            前往 Telegram 打开
+         </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen pb-[88px] overflow-x-hidden">

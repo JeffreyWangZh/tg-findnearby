@@ -29,16 +29,16 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
   };
 
   const filteredMerchants = merchants.filter(m => {
-     if (activeFilter === '最新探店') return (m.reviews?.length || 0) < 5;
-     if (activeFilter === '品牌认领') return m.is_verified;
-     if (activeFilter === '活动精选') return m.deal_title || m.is_sponsored;
-     return true;
+    if (activeFilter === '最新探店') return (m.reviews?.length || 0) < 5;
+    if (activeFilter === '品牌认领') return m.is_verified;
+    if (activeFilter === '活动精选') return m.deal_title || m.is_sponsored;
+    return true;
   });
 
   return (
-    <div className="space-y-5 pb-8">
+    <div className="space-y-2 pb-8">
       {/* Hero Card */}
-      <div className="p-6 glass-card flex flex-col items-center text-center space-y-4 relative overflow-hidden">
+      {/* <div className="p-6 glass-card flex flex-col items-center text-center space-y-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl" />
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
           <MapPin className="w-8 h-8 text-white" />
@@ -53,10 +53,10 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
         >
           我来推荐商户
         </button>
-      </div>
+      </div> */}
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* <div className="grid grid-cols-3 gap-3">
         {[
           { num: merchants.length || '128', label: '已入驻商户', color: 'text-blue-500' },
           { num: '56', label: '本周新增', color: 'text-emerald-500' },
@@ -67,24 +67,24 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
             <p className="text-[10px] font-bold text-tg-hint uppercase tracking-widest">{stat.label}</p>
           </div>
         ))}
-      </div>
+      </div> */}
 
       {/* Merchants Feed */}
       <div className="space-y-4 pt-2">
         <div className="flex items-center justify-between px-1 mb-2">
-           <h3 className="text-lg font-black text-tg-text">最新好店</h3>
+          <h3 className="text-lg font-black text-tg-text">最新好店</h3>
         </div>
 
         {/* Filter Bar */}
         <div className="flex gap-2 px-1 pb-2 overflow-x-auto no-scrollbar scroll-smooth">
           {FILTERS.map(f => (
-            <button 
+            <button
               key={f}
               onClick={() => setActiveFilter(f)}
               className={clsx(
                 "px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all active:scale-95 border",
-                activeFilter === f 
-                  ? "bg-tg-text text-tg-bg border-transparent shadow-sm" 
+                activeFilter === f
+                  ? "bg-tg-text text-tg-bg border-transparent shadow-sm"
                   : "bg-black/5 text-tg-hint border-black/5 hover:bg-black/10"
               )}
               style={activeFilter === f ? { backgroundColor: 'var(--tg-theme-text-color)', color: 'var(--tg-theme-bg-color)' } : {}}
@@ -93,14 +93,14 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
             </button>
           ))}
         </div>
-        
+
         {loading ? (
           <div className="py-12 flex flex-col items-center justify-center text-tg-hint gap-3">
             <Loader2 size={32} className="animate-spin text-blue-500" />
             <p className="text-sm font-bold">寻找周围的好店...</p>
           </div>
         ) : filteredMerchants.length === 0 ? (
-          <div className="py-12 flex flex-col items-center justify-center text-tg-hint gap-3 border border-dashed border-gray-300 rounded-3xl mx-1 bg-white/50 backdrop-blur" style={{ borderColor: 'var(--tg-theme-secondary-bg-color)'}}>
+          <div className="py-12 flex flex-col items-center justify-center text-tg-hint gap-3 border border-dashed border-gray-300 rounded-3xl mx-1 bg-white/50 backdrop-blur" style={{ borderColor: 'var(--tg-theme-secondary-bg-color)' }}>
             <Target size={40} className="text-gray-300" />
             <p className="text-sm font-bold text-tg-hint">没有符合条件的商铺</p>
             <button onClick={() => setActiveFilter('全部')} className="text-xs font-bold text-blue-500">查看其他推荐</button>
@@ -108,7 +108,7 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
         ) : (
           filteredMerchants.map((merchant) => {
             const currentTag = collections[merchant.id]?.tag;
-            
+
             // 安全解析可能会被当做字符串加载的 JSONB
             let imageUrl = null;
             try {
@@ -117,12 +117,12 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
               if (Array.isArray(media) && media.length > 0) {
                 imageUrl = media[0]?.url || media[0];
               }
-            } catch (e) {}
-            
+            } catch (e) { }
+
             imageUrl = imageUrl || FALLBACK_IMAGES[merchant.category] || FALLBACK_IMAGES['默认'];
 
             return (
-              <motion.div 
+              <motion.div
                 key={merchant.id}
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -143,7 +143,7 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
                     </span>
                   </div>
                 </div>
-                
+
                 <div className="p-4 space-y-3">
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0 pr-2">
@@ -157,7 +157,7 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
                     </div>
                     {/* Tag Buttons */}
                     <div className="flex bg-gray-100 rounded-lg p-1 flex-shrink-0" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f0f0f0)' }} onClick={e => e.stopPropagation()}>
-                      <button 
+                      <button
                         onClick={() => setTag(merchant, '待打卡')}
                         className={clsx(
                           "px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1",
@@ -166,7 +166,7 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
                       >
                         <TargetIcon size={12} /> 待打卡
                       </button>
-                      <button 
+                      <button
                         onClick={() => setTag(merchant, '已打卡')}
                         className={clsx(
                           "px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1",

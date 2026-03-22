@@ -1,17 +1,35 @@
 import WebApp from '@twa-dev/sdk'
 
 /**
+ * 检查应用是否运行在真实的 Telegram 环境中
+ * 支持通过 ?debug=true 或 本地开发环境(Vite DEV) 绕过限制
+ */
+export const isTelegramEnvironment = () => {
+  const isDebug = new URLSearchParams(window.location.search).get('debug') === 'true';
+  const isLocalDev = import.meta.env?.DEV;
+
+  if (isDebug || isLocalDev) return true;
+
+  // 严格检查 Telegram InitData 和 UserID
+  const hasInitData = WebApp.initData && WebApp.initData.trim() !== '';
+  const hasUserId = WebApp.initDataUnsafe?.user?.id != null;
+  const platform = WebApp.platform;
+
+  return hasInitData && hasUserId && platform !== 'unknown';
+};
+
+/**
  * 获取当前 Telegram 用户信息 (兼容本地浏览器测试)
  */
 export const getCurrentTgUser = () => {
   const user = WebApp.initDataUnsafe?.user;
-  if (user) {
+  if (user && user.id) {
     return {
       id: user.id,
       username: user.username || user.first_name || 'Anonymous'
     };
   }
-  // 浏览器开发环境的假数据
+  // 必须是本地开发环境/调试模式才可以拿到假数据
   return {
     id: 12345678,
     username: 'DevUser'
