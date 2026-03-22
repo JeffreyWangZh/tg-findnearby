@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import clsx from 'clsx'
 import { supabase } from '../lib/supabase'
 import { getCurrentTgUser } from '../utils/telegram'
+import LocationPicker from './LocationPicker'
 
 const STEPS = [
   { title: "基本信息", subtitle: "填写商户的基础资料", icon: Plus },
@@ -270,15 +271,15 @@ export default function AddMerchantForm({ onFinish }) {
                     onChange={(e) => setFormData({...formData, address: e.target.value})}
                   />
                </div>
-               <div className="aspect-[16/10] rounded-xl flex flex-col items-center justify-center text-tg-hint border border-black/5 relative overflow-hidden" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color, #f5f5f5)' }}>
-                  <MapPin className="w-7 h-7 opacity-30" />
-                  <p className="text-xs font-bold mt-2 text-tg-hint/60">地图选点模块</p>
-                  
-                  <div className="absolute bottom-3 left-3 right-3 p-3 bg-white/90 backdrop-blur-lg rounded-xl border border-black/5 flex justify-between items-center">
-                     <span className="text-[11px] font-mono text-tg-text">LAT: {formData.geo.lat}</span>
-                     <span className="text-[11px] font-mono text-tg-text">LNG: {formData.geo.lng}</span>
-                  </div>
+               <div className="aspect-[16/10] rounded-xl relative overflow-hidden">
+                  <LocationPicker 
+                    geo={formData.geo} 
+                    onChange={(geo) => setFormData({ ...formData, geo })}
+                  />
                </div>
+               <p className="text-[10px] text-tg-hint text-center mt-2">
+                 拖动大头针，或者点击地图定位
+               </p>
             </div>
           )}
         </motion.div>

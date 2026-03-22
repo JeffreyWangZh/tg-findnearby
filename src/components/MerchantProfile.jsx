@@ -4,6 +4,7 @@ import { MessageCircle, MapPin, Share2, CheckCircle, Edit3, Heart, Send, Loader2
 import { contactMerchantOwner, getCurrentTgUser } from '../utils/telegram'
 import { supabase } from '../lib/supabase'
 import clsx from 'clsx'
+import LocationPicker from './LocationPicker'
 
 export default function MerchantProfile({ merchant, onBack }) {
   const [data, setData] = useState(merchant);
@@ -18,6 +19,7 @@ export default function MerchantProfile({ merchant, onBack }) {
   const [editForm, setEditForm] = useState({
     description: data.description || '',
     address: data.physical_address || '',
+    geo: { lat: data.lat || 22.54, lng: data.lng || 114.05 }
   });
 
   useEffect(() => {
@@ -175,6 +177,12 @@ export default function MerchantProfile({ merchant, onBack }) {
                   className="tg-input py-2 mt-1" 
                 />
               </div>
+              <div className="aspect-[16/10] rounded-xl overflow-hidden my-3">
+                 <LocationPicker 
+                   geo={editForm.geo} 
+                   onChange={(geo) => setEditForm({ ...editForm, geo })}
+                 />
+              </div>
               <div>
                 <label className="text-xs text-tg-hint font-bold">店铺描述</label>
                 <textarea 
@@ -184,7 +192,7 @@ export default function MerchantProfile({ merchant, onBack }) {
                   rows={2}
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-2">
                 <button 
                   onClick={() => setIsEditing(false)} 
                   className="flex-1 py-2 rounded-xl bg-gray-200 text-gray-600 font-bold text-sm"
@@ -212,8 +220,14 @@ export default function MerchantProfile({ merchant, onBack }) {
                    <p className="text-sm font-bold text-tg-text">{data.physical_address}</p>
                 </div>
               </div>
+              <div className="aspect-[21/9] rounded-xl overflow-hidden border border-black/5 opacity-80 pointer-events-none">
+                 <LocationPicker 
+                   geo={{ lat: data.lat, lng: data.lng }} 
+                   readonly={true}
+                 />
+              </div>
               {data.description && (
-                <div className="pt-3 border-t border-black/5">
+                <div className="pt-2 border-t border-black/5">
                   <p className="text-sm text-tg-text leading-relaxed">{data.description}</p>
                 </div>
               )}
