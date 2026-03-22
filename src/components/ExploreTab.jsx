@@ -7,6 +7,8 @@ import { supabase } from '../lib/supabase';
 import { FALLBACK_IMAGES } from '../utils/telegram';
 
 export default function ExploreTab({ collections, setTag, onAddClick, onMerchantClick }) {
+  const FILTERS = ['全部', '最新探店', '品牌认领', '活动精选'];
+  const [activeFilter, setActiveFilter] = useState('全部');
   const [merchants, setMerchants] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,13 +20,20 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
     setLoading(true);
     const { data, error } = await supabase
       .from('merchants')
-      .select('*')
+      .select('*, reviews(id)')
       .order('is_sponsored', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false });
 
     if (!error) setMerchants(data || []);
     setLoading(false);
   };
+
+  const filteredMerchants = merchants.filter(m => {
+     if (activeFilter === '最新探店') return (m.reviews?.length || 0) < 5;
+     if (activeFilter === '品牌认领') return m.is_verified;
+     if (activeFilter === '活动精选') return m.deal_title || m.is_sponsored;
+     return true;
+  });
 
   return (
     <div className="space-y-5 pb-8">
@@ -62,21 +71,42 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
 
       {/* Merchants Feed */}
       <div className="space-y-4 pt-2">
-        <h3 className="text-lg font-black text-tg-text mb-2 px-1">最新好店</h3>
+        <div className="flex items-center justify-between px-1 mb-2">
+           <h3 className="text-lg font-black text-tg-text">最新好店</h3>
+        </div>
+
+        {/* Filter Bar */}
+        <div className="flex gap-2 px-1 pb-2 overflow-x-auto no-scrollbar scroll-smooth">
+          {FILTERS.map(f => (
+            <button 
+              key={f}
+              onClick={() => setActiveFilter(f)}
+              className={clsx(
+                "px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all active:scale-95 border",
+                activeFilter === f 
+                  ? "bg-tg-text text-tg-bg border-transparent shadow-sm" 
+                  : "bg-black/5 text-tg-hint border-black/5 hover:bg-black/10"
+              )}
+              style={activeFilter === f ? { backgroundColor: 'var(--tg-theme-text-color)', color: 'var(--tg-theme-bg-color)' } : {}}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
         
         {loading ? (
           <div className="py-12 flex flex-col items-center justify-center text-tg-hint gap-3">
             <Loader2 size={32} className="animate-spin text-blue-500" />
             <p className="text-sm font-bold">寻找周围的好店...</p>
           </div>
-        ) : merchants.length === 0 ? (
+        ) : filteredMerchants.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center text-tg-hint gap-3 border border-dashed border-gray-300 rounded-3xl mx-1 bg-white/50 backdrop-blur" style={{ borderColor: 'var(--tg-theme-secondary-bg-color)'}}>
-            <MapPin size={40} className="text-gray-300" />
-            <p className="text-sm font-bold text-tg-hint">附近暂无商户</p>
-            <button onClick={onAddClick} className="text-xs font-bold text-blue-500">成为第一个推荐的人</button>
+            <Target size={40} className="text-gray-300" />
+            <p className="text-sm font-bold text-tg-hint">没有符合条件的商铺</p>
+            <button onClick={() => setActiveFilter('全部')} className="text-xs font-bold text-blue-500">查看其他推荐</button>
           </div>
         ) : (
-          merchants.map((merchant) => {
+          filteredMerchants.map((merchant) => {
             const currentTag = collections[merchant.id]?.tag;
             
             // 安全解析可能会被当做字符串加载的 JSONB

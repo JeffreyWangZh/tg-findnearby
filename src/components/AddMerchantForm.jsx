@@ -22,6 +22,15 @@ const CATEGORIES = [
 export default function AddMerchantForm({ onFinish }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  
+  const getInitialGeo = () => {
+    try {
+      const saved = localStorage.getItem('last_geo');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return { lat: 22.54, lng: 114.05 };
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -29,7 +38,7 @@ export default function AddMerchantForm({ onFinish }) {
     description: '',
     owner_tg: '',
     media: [],
-    geo: { lat: 22.54, lng: 114.05 }
+    geo: getInitialGeo()
   });
   
   const fileInputRef = useRef(null);

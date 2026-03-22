@@ -50,6 +50,13 @@ export default function LocationPicker({ geo, onChange, readonly = false }) {
     }
   }, [position.lat, position.lng]);
 
+  const handlePositionChange = (newPos) => {
+    onChange(newPos);
+    if (!readonly) {
+      localStorage.setItem('last_geo', JSON.stringify(newPos));
+    }
+  };
+
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -61,7 +68,7 @@ export default function LocationPicker({ geo, onChange, readonly = false }) {
       if (data && data.length > 0) {
         const result = data[0];
         const newPos = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
-        onChange(newPos);
+        handlePositionChange(newPos);
       } else {
         alert("未找到该地点，请尝试输入更详细的地址或城市名");
       }
@@ -105,7 +112,7 @@ export default function LocationPicker({ geo, onChange, readonly = false }) {
             attribution='&copy; OSM'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <LocationMarker position={position} setPosition={onChange} readonly={readonly} mapInstance={mapInstance} />
+          <LocationMarker position={position} setPosition={handlePositionChange} readonly={readonly} mapInstance={mapInstance} />
         </MapContainer>
         
         {!readonly && (
