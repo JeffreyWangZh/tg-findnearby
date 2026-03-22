@@ -88,7 +88,7 @@ export default function LocationPicker({ geo, onChange, readonly = false }) {
             placeholder="搜地址 (如: 深圳 南山区)" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 bg-white px-3 py-1.5 rounded-lg text-xs outline-none border border-black/10 shadow-sm"
+            className="flex-1 bg-white px-3 py-1.5 rounded-lg text-xs text-gray-900 placeholder-gray-500 outline-none border border-black/10 shadow-sm"
           />
           <button 
             type="submit" 

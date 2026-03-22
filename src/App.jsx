@@ -29,9 +29,35 @@ function App() {
   const [activeTab, setActiveTab] = useState('explore');
   const [selectedMerchant, setSelectedMerchant] = useState(null);
   const [currentGeo, setCurrentGeo] = useState(getInitialGeo());
+  const [currentLocationName, setCurrentLocationName] = useState('定位中...');
   const [isLocationModalOpen, setLocationModalOpen] = useState(false);
   const { collections, setTag } = useCollections();
   const [isAuthorized, setIsAuthorized] = useState(true);
+
+  useEffect(() => {
+    // Reverse geocoding to find Neighbourhood/Street Name
+    const fetchLocationName = async () => {
+      setCurrentLocationName('定位中...');
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentGeo.lat}&lon=${currentGeo.lng}&zoom=16&addressdetails=1`);
+        const data = await res.json();
+        if (data && data.address) {
+          const addr = data.address;
+          const shortName = addr.neighbourhood || addr.suburb || addr.quarter || addr.road || addr.town || addr.city || addr.county || '未知区域';
+          setCurrentLocationName(shortName);
+        } else {
+          setCurrentLocationName('未知街区');
+        }
+      } catch (err) {
+         console.error('Reverse geocode err:', err);
+         setCurrentLocationName('网络或定位异常');
+      }
+    };
+    
+    // add small debounce delay to avoid spamming Nominatim when modal dragging
+    const timerId = setTimeout(fetchLocationName, 800);
+    return () => clearTimeout(timerId);
+  }, [currentGeo.lat, currentGeo.lng]);
 
   useEffect(() => {
     setIsAuthorized(isTelegramEnvironment());
@@ -73,26 +99,29 @@ function App() {
     <div className="flex flex-col min-h-screen pb-[88px] overflow-x-hidden">
       {/* Header */}
       <header className="px-5 py-3.5 flex items-center justify-between sticky top-0 z-50 backdrop-blur-xl border-b border-black/5" style={{ backgroundColor: 'var(--tg-theme-bg-color, rgba(255,255,255,0.85))' }}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 max-w-[85%]">
           {selectedMerchant ? (
-            <button onClick={() => setSelectedMerchant(null)} className="p-1 -ml-2 rounded-lg text-blue-500 hover:bg-blue-500/10">
-              <ChevronLeft size={24} />
+            <button onClick={() => setSelectedMerchant(null)} className="p-1 -ml-2 rounded-lg text-blue-500 hover:bg-blue-500/10 flex-shrink-0">
+              <ChevronLeft size={26} />
             </button>
           ) : (
-            <button onClick={() => setLocationModalOpen(true)} className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md active:scale-95 transition-all">
+            <button onClick={() => setLocationModalOpen(true)} className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md active:scale-95 transition-all flex-shrink-0">
               <MapPin size={16} className="text-white" />
             </button>
           )}
-          <h1 
-            className="text-lg font-black text-tg-text flex items-center gap-1 active:opacity-70 transition-opacity cursor-pointer" 
+          <div 
+            className={clsx("flex flex-col cursor-pointer active:opacity-70 transition-opacity min-w-0 pr-2", selectedMerchant && 'pointer-events-none')} 
             onClick={() => !selectedMerchant && setLocationModalOpen(true)}
           >
-            {selectedMerchant ? '商户详情' : '探索附近'} {(!selectedMerchant && <ChevronDown size={16} className="text-tg-hint"/>)}
-          </h1>
-        </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 rounded-full">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-emerald-600">在线</span>
+            <h1 className="text-lg font-black text-tg-text truncate flex items-center gap-1">
+              {selectedMerchant ? '商户详情' : currentLocationName}
+            </h1>
+            {!selectedMerchant && (
+              <span className="text-[10px] text-blue-500 font-bold flex items-center gap-0.5 mt-0.5">
+                更改位置 <ChevronDown size={11} strokeWidth={3} />
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
