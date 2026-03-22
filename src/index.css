@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-tg-bg text-tg-text antialiased min-h-screen selection:bg-tg-link selection:bg-opacity-20;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply backdrop-blur-md border border-white/10 rounded-2xl shadow-xl transition-all duration-300;
+    background-color: var(--tg-theme-secondary-bg-color, rgba(240, 240, 240, 0.6));
+  }
+  
+  .tg-input {
+    @apply w-full px-4 py-3 border border-transparent rounded-xl outline-none transition-all;
+    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    color: var(--tg-theme-text-color, #000);
+  }
+  .tg-input:focus {
+    border-color: var(--tg-theme-link-color, #2481cc);
+  }
+  
+  .tg-button {
+    @apply w-full px-6 py-4 font-semibold rounded-2xl active:scale-95 transition-all shadow-lg uppercase tracking-wide;
+    background-color: var(--tg-theme-button-color, #3390ec);
+    color: var(--tg-theme-button-text-color, #ffffff);
+  }
+  
+  .step-indicator {
+    @apply h-1.5 flex-1 rounded-full overflow-hidden;
+    background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+  }
+  
+  .step-indicator-active {
+    @apply h-full transition-all duration-500;
+    background-color: var(--tg-theme-link-color, #2481cc);
+  }
+}
+
+/* Custom scrollbar for premium feel */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(112, 117, 121, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(112, 117, 121, 0.5);
+}
