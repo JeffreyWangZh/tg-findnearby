@@ -41,6 +41,17 @@ export default function MerchantProfile({ merchant, onBack }) {
   // 必须：1. 商户未认领  2. 用户的 TG username/id 和 owner_tg_id 匹配  3. 不是创建者自己认领
   const canClaim = !data.is_verified && ownerTgMatch;
 
+  // Parse deals: support legacy deal_title/deal_points OR new deals JSONB array
+  const parseDeals = (d) => {
+    try {
+      if (d.deals && Array.isArray(d.deals) && d.deals.length > 0) return d.deals;
+      if (typeof d.deals === 'string') { const parsed = JSON.parse(d.deals); if (Array.isArray(parsed)) return parsed; }
+    } catch(e) {}
+    // Legacy fallback
+    if (d.deal_title) return [{ title: d.deal_title, points: d.deal_points || 0, quantity: 0 }];
+    return [];
+  };
+
   const [editForm, setEditForm] = useState({
     name: data.name || '',
     category: data.category || '',
@@ -49,8 +60,7 @@ export default function MerchantProfile({ merchant, onBack }) {
     description: data.description || '',
     address: data.physical_address || '',
     geo: { lat: data.lat || 22.54, lng: data.lng || 114.05 },
-    deal_title: data.deal_title || '',
-    deal_points: data.deal_points || 0
+    deals: parseDeals(data)
   });
 
   useEffect(() => {
@@ -161,9 +171,16 @@ export default function MerchantProfile({ merchant, onBack }) {
     });
   };
 
-  const handleBuyDeal = () => {
-    checkBalanceAndProceed(data.deal_points, `抢购: ${data.deal_title}`, async () => {
-      await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: `抢购营销特卖 - ${data.deal_title}`, points: -data.deal_points });
+  const handleBuyDeal = (deal) => {
+    checkBalanceAndProceed(deal.points, `抢购: ${deal.title}`, async () => {
+      await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: `抢购营销特卖 - ${deal.title}`, points: -deal.points });
+      // Decrement quantity if tracked
+      if (deal.quantity > 0) {
+        const currentDeals = parseDeals(data);
+        const updatedDeals = currentDeals.map(d => d.title === deal.title ? { ...d, quantity: Math.max(0, d.quantity - 1) } : d);
+        await supabase.from('merchants').update({ deals: updatedDeals, deal_title: deal.title, deal_points: deal.points }).eq('id', data.id);
+        setData({ ...data, deals: updatedDeals });
+      }
       try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
       safeShowPopup({ title: '🎉 兑换成功', message: '请向商家出示此购买明细以核销。' });
     });
@@ -175,6 +192,7 @@ export default function MerchantProfile({ merchant, onBack }) {
       return;
     }
     setSubmitting(true);
+    const validDeals = editForm.deals.filter(d => d.title.trim());
     const updatePayload = {
       name: editForm.name.trim(),
       category: editForm.category,
@@ -184,8 +202,9 @@ export default function MerchantProfile({ merchant, onBack }) {
       physical_address: editForm.address.trim(),
       lat: editForm.geo.lat,
       lng: editForm.geo.lng,
-      deal_title: editForm.deal_title,
-      deal_points: editForm.deal_points
+      deals: validDeals,
+      deal_title: validDeals[0]?.title || '',
+      deal_points: validDeals[0]?.points || 0
     };
     const { error } = await supabase.from('merchants').update(updatePayload).eq('id', data.id);
     if (!error) {
@@ -328,9 +347,9 @@ export default function MerchantProfile({ merchant, onBack }) {
 
              <hr className="border-black/5 border-dashed" />
 
-             {/* 联系方式 & 主页 */}
+             {/* 联系方式 & 频道 */}
              <div>
-               <label className="text-xs text-tg-hint font-bold">联系/社媒主页链接</label>
+               <label className="text-xs text-tg-hint font-bold">频道/Channel 链接</label>
                <div className="relative">
                  <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                  <input type="text" placeholder="https://..." className="tg-input py-2 mt-1 pl-9" value={editForm.homepage_url} onChange={e => setEditForm({...editForm, homepage_url: e.target.value})} />
@@ -362,20 +381,38 @@ export default function MerchantProfile({ merchant, onBack }) {
              <div className="aspect-[16/10] rounded-xl overflow-hidden my-1 border border-black/10 shadow-inner">
                 <LocationPicker geo={editForm.geo} onChange={(geo) => setEditForm({ ...editForm, geo })} />
              </div>
-             <div className="pt-3 border-t border-blue-500/20 mt-3">
-               <p className="text-xs font-bold text-amber-500 mb-2.5 flex items-center gap-1.5"><Ticket size={14}/> 营销中心</p>
-               <div className="flex gap-2">
-                  <div className="flex-[2]">
-                    <label className="text-[10px] text-tg-hint font-bold">福利名称</label>
-                    <input type="text" placeholder="留空则不发放" value={editForm.deal_title} onChange={e => setEditForm({...editForm, deal_title: e.target.value})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] text-tg-hint font-bold">兑换积分</label>
-                    <input type="number" min="0" value={editForm.deal_points} onChange={e => setEditForm({...editForm, deal_points: Math.max(0, parseInt(e.target.value) || 0)})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
-                  </div>
+             {/* 营销福利 - 仅认领老板可编辑 */}
+             {data.is_verified && (
+               <div className="pt-3 border-t border-blue-500/20 mt-3">
+                 <p className="text-xs font-bold text-amber-500 mb-2.5 flex items-center gap-1.5"><Ticket size={14}/> 营销中心 (老板专属)</p>
+                 {editForm.deals.map((deal, idx) => (
+                   <div key={idx} className="flex gap-2 items-end mb-2 p-2.5 bg-amber-50/50 rounded-xl border border-amber-200/50">
+                      <div className="flex-[3]">
+                        {idx === 0 && <label className="text-[10px] text-tg-hint font-bold">福利名称</label>}
+                        <input type="text" placeholder="如: 5折咖啡券" value={deal.title} onChange={e => { const d = [...editForm.deals]; d[idx] = {...d[idx], title: e.target.value}; setEditForm({...editForm, deals: d}); }} className="tg-input py-1.5 mt-0.5 w-full text-xs" />
+                      </div>
+                      <div className="flex-1">
+                        {idx === 0 && <label className="text-[10px] text-tg-hint font-bold">积分</label>}
+                        <input type="number" min="0" value={deal.points} onChange={e => { const d = [...editForm.deals]; d[idx] = {...d[idx], points: Math.max(0, parseInt(e.target.value) || 0)}; setEditForm({...editForm, deals: d}); }} className="tg-input py-1.5 mt-0.5 w-full text-xs" />
+                      </div>
+                      <div className="flex-1">
+                        {idx === 0 && <label className="text-[10px] text-tg-hint font-bold">数量</label>}
+                        <input type="number" min="0" placeholder="不限" value={deal.quantity || ''} onChange={e => { const d = [...editForm.deals]; d[idx] = {...d[idx], quantity: Math.max(0, parseInt(e.target.value) || 0)}; setEditForm({...editForm, deals: d}); }} className="tg-input py-1.5 mt-0.5 w-full text-xs" />
+                      </div>
+                      <button type="button" onClick={() => { const d = editForm.deals.filter((_, i) => i !== idx); setEditForm({...editForm, deals: d}); }} className="p-1.5 text-red-400 hover:text-red-600 active:scale-90 flex-shrink-0 mb-0.5">
+                        <Plus size={14} className="rotate-45" />
+                      </button>
+                   </div>
+                 ))}
+                 <button type="button" onClick={() => setEditForm({...editForm, deals: [...editForm.deals, { title: '', points: 0, quantity: 0 }]})} className="w-full py-2 rounded-xl border border-dashed border-amber-300 text-amber-600 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 mt-1">
+                   <Plus size={14} /> 添加营销活动
+                 </button>
                </div>
-             </div>
-             {!data.is_sponsored && (
+             )}
+             {!data.is_verified && (
+               <p className="text-[10px] text-tg-hint italic text-center pt-3 border-t border-black/5 mt-3">🔒 认领商户后可发布营销福利活动</p>
+             )}
+             {!data.is_sponsored && data.is_verified && (
                <button onClick={handleBoost} type="button" className="w-full mt-3 py-3 rounded-xl border border-rose-500/30 text-rose-500 bg-rose-500/5 font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95">
                  <Zap size={16} /> 消耗 1000 积分首页置顶
                </button>
@@ -426,7 +463,7 @@ export default function MerchantProfile({ merchant, onBack }) {
                           <LinkIcon size={18} />
                        </div>
                        <div className="min-w-0">
-                          <p className="text-xs font-black text-tg-text">主页 / 社媒</p>
+                          <p className="text-xs font-black text-tg-text">频道 / Channel</p>
                           <p className="text-[11px] text-tg-link font-medium truncate max-w-[180px]">{data.homepage_url.replace(/^https?:\/\//, '')}</p>
                        </div>
                     </div>
@@ -485,20 +522,33 @@ export default function MerchantProfile({ merchant, onBack }) {
                )}
             </div>
 
-            {/* ⑤ 福利券 */}
-            {data.deal_title && (
-              <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-lg shadow-orange-500/20 text-white flex justify-between items-center relative overflow-hidden active:scale-[0.98] transition-transform">
-                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl z-0" />
-                 <div className="z-10 flex-1 pr-4">
-                    <div className="flex items-center gap-1.5 text-white/90 text-[10px] font-bold mb-1 opacity-90"><Ticket size={14} /> 粉丝专属福利</div>
-                    <p className="text-lg font-black leading-tight drop-shadow-sm">{data.deal_title}</p>
-                    <p className="text-xs font-bold mt-1 text-white/90 bg-black/10 inline-block px-2 py-0.5 rounded">💎 兑换需 {data.deal_points} 积分</p>
-                 </div>
-                 <button onClick={handleBuyDeal} disabled={submitting} className="z-10 flex-shrink-0 px-4 py-2 bg-white text-orange-500 rounded-xl font-black text-sm shadow-sm active:scale-90 transition-transform disabled:opacity-50">
-                    抢名额
-                 </button>
-              </div>
-            )}
+            {/* ⑤ 营销福利券列表 */}
+            {(() => {
+              const deals = parseDeals(data);
+              if (deals.length === 0) return null;
+              return (
+                <div className="space-y-3">
+                  <p className="text-[10px] font-black text-tg-hint uppercase tracking-widest">营销福利</p>
+                  {deals.map((deal, idx) => (
+                    <div key={idx} className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-lg shadow-orange-500/20 text-white flex justify-between items-center relative overflow-hidden active:scale-[0.98] transition-transform">
+                       <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl z-0" />
+                       <div className="z-10 flex-1 pr-4">
+                          <div className="flex items-center gap-1.5 text-white/90 text-[10px] font-bold mb-1 opacity-90"><Ticket size={14} /> 粉丝专属福利</div>
+                          <p className="text-lg font-black leading-tight drop-shadow-sm">{deal.title}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs font-bold text-white/90 bg-black/10 px-2 py-0.5 rounded">💎 {deal.points} 积分</span>
+                            {deal.quantity > 0 && <span className="text-xs font-bold text-white/90 bg-black/10 px-2 py-0.5 rounded">剩余 {deal.quantity} 份</span>}
+                            {deal.quantity === 0 && <span className="text-[10px] text-white/70">不限量</span>}
+                          </div>
+                       </div>
+                       <button onClick={() => handleBuyDeal(deal)} disabled={submitting || (deal.quantity > 0 && deal.quantity <= 0)} className="z-10 flex-shrink-0 px-4 py-2 bg-white text-orange-500 rounded-xl font-black text-sm shadow-sm active:scale-90 transition-transform disabled:opacity-50">
+                          抢名额
+                       </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

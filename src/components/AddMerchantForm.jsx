@@ -225,7 +225,7 @@ export default function AddMerchantForm({ onFinish }) {
 
         {/* Contact info & Links */}
         <div>
-          <label className="label-text">联系/社媒主页链接 (选填)</label>
+          <label className="label-text">频道/Channel 链接 (选填)</label>
           <div className="relative mb-3">
             <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input 
