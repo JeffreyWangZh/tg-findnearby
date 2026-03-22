@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { MessageCircle, MapPin, Share2, CheckCircle, Edit3, Heart, Send, Loader2, ShieldCheck, Ticket, Zap } from 'lucide-react'
-import { contactMerchantOwner, getCurrentTgUser } from '../utils/telegram'
+import { MessageCircle, MapPin, Share2, CheckCircle, Edit3, Heart, Send, Loader2, ShieldCheck, Ticket, Zap, Link as LinkIcon, Plus } from 'lucide-react'
+import { contactMerchantOwner, getCurrentTgUser, safeShowPopup, safeShowConfirm } from '../utils/telegram'
 import { supabase } from '../lib/supabase'
 import clsx from 'clsx'
 import LocationPicker from './LocationPicker'
@@ -9,6 +9,7 @@ import LocationPicker from './LocationPicker'
 export default function MerchantProfile({ merchant, onBack }) {
   const [data, setData] = useState(merchant);
   const [reviews, setReviews] = useState([]);
+  const [tags, setTags] = useState([]);
   const [newReview, setNewReview] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -26,7 +27,45 @@ export default function MerchantProfile({ merchant, onBack }) {
 
   useEffect(() => {
     fetchReviews();
+    fetchTags();
   }, [data.id]);
+
+  const fetchTags = async () => {
+    const { data: tagVotes, error } = await supabase
+      .from('merchant_tag_votes')
+      .select('tag_name, user_id')
+      .eq('merchant_id', data.id);
+
+    if (!error && tagVotes) {
+      const tagCounts = {};
+      tagVotes.forEach(v => {
+         if (!tagCounts[v.tag_name]) {
+            tagCounts[v.tag_name] = { count: 0, votedByMe: false };
+         }
+         tagCounts[v.tag_name].count++;
+         if (String(v.user_id) === String(currentUser.id)) {
+            tagCounts[v.tag_name].votedByMe = true;
+         }
+      });
+      setTags(Object.keys(tagCounts).map(name => ({ ...tagCounts[name], name })).sort((a,b) => b.count - a.count));
+    }
+  };
+
+  const handleUpvoteTag = async (tag) => {
+    if (tag.votedByMe) return;
+    try { WebApp.HapticFeedback.impactOccurred('light'); } catch (e) {}
+
+    // Optimistic UI update
+    setTags(tags.map(t => t.name === tag.name ? { ...t, count: t.count + 1, votedByMe: true } : t));
+
+    const { error } = await supabase.from('merchant_tag_votes').insert({
+       merchant_id: data.id,
+       tag_name: tag.name,
+       user_id: String(currentUser.id)
+    });
+    if (error) console.error("Upvote failed", error);
+  };
+
 
   const fetchReviews = async () => {
     const { data: revs, error } = await supabase
@@ -47,14 +86,14 @@ export default function MerchantProfile({ merchant, onBack }) {
   const handleContact = () => contactMerchantOwner(data.owner_tg_id);
 
   const handleShare = () => {
-    WebApp.showPopup({
+    safeShowPopup({
       message: '分享此商户给好友？',
       buttons: [{ text: '立即分享', type: 'default' }, { text: '取消', type: 'cancel' }]
     });
   };
 
   const checkBalanceAndProceed = async (cost, actionName, performAction) => {
-    WebApp.showConfirm(`将消耗 ${cost} 积分执行 [${actionName}]，确认操作吗？`, async (ok) => {
+    safeShowConfirm(`将消耗 ${cost} 积分执行 [${actionName}]，确认操作吗？`, async (ok) => {
       if (!ok) return;
       
       setSubmitting(true);
@@ -64,11 +103,11 @@ export default function MerchantProfile({ merchant, onBack }) {
       
       if (currentBalance < cost) {
         setSubmitting(false);
-        WebApp.showConfirm(`您的积分不足可怜 (余额: ${currentBalance} / 需要: ${cost})\n\n[测试环境特权] 是否要免费模拟 Telegram Stars 充值 5000 积分？`, async (rechargeOk) => {
+        safeShowConfirm(`您的积分不足可怜 (余额: ${currentBalance} / 需要: ${cost})\n\n[测试环境特权] 是否要免费模拟 Telegram Stars 充值 5000 积分？`, async (rechargeOk) => {
           if (rechargeOk) {
-            WebApp.HapticFeedback.impactOccurred('medium');
+            try { WebApp.HapticFeedback.impactOccurred('medium'); } catch(e){}
             await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: '模拟代币充值 (Telegram Stars)', points: 5000 });
-            WebApp.showPopup({ title: '💎 到账成功', message: '测试充值 5000 积分已发放，请再次点击操作！' });
+            safeShowPopup({ title: '💎 到账成功', message: '测试充值 5000 积分已发放，请再次点击操作！' });
           }
         });
         return;
@@ -86,8 +125,8 @@ export default function MerchantProfile({ merchant, onBack }) {
       });
       await supabase.from('merchants').update({ is_sponsored: true }).eq('id', data.id);
       setData({...data, is_sponsored: true});
-      WebApp.HapticFeedback.notificationOccurred('success');
-      WebApp.showPopup({ title: '👑 置顶成功', message: '交易达成！您的店铺已置顶。' });
+      try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
+      safeShowPopup({ title: '👑 置顶成功', message: '交易达成！您的店铺已置顶。' });
     });
   };
 
@@ -101,8 +140,8 @@ export default function MerchantProfile({ merchant, onBack }) {
         submitter_tg_id: currentUser.id
       }).eq('id', data.id);
       setData({...data, is_verified: true, submitter_tg_id: currentUser.id});
-      WebApp.HapticFeedback.notificationOccurred('success');
-      WebApp.showPopup({ title: '💎 认领成功', message: '商铺已绑定您的账号！' });
+      try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
+      safeShowPopup({ title: '💎 认领成功', message: '商铺已绑定您的账号！' });
     });
   };
 
@@ -111,8 +150,8 @@ export default function MerchantProfile({ merchant, onBack }) {
       await supabase.from('points_history').insert({
         tg_user_id: currentUser.id, action: `抢购营销特卖 - ${data.deal_title}`, points: -data.deal_points
       });
-      WebApp.HapticFeedback.notificationOccurred('success');
-      WebApp.showPopup({ title: '🎉 兑换成功', message: `请向商家出示此购买明细以核销。` });
+      try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
+      safeShowPopup({ title: '🎉 兑换成功', message: `请向商家出示此购买明细以核销。` });
     });
   };
 
@@ -164,7 +203,7 @@ export default function MerchantProfile({ merchant, onBack }) {
 
       setNewReview('');
       fetchReviews();
-      WebApp.showPopup({
+      safeShowPopup({
          title: '🌟 评价发布成功',
          message: `感谢您的分享！系统赠送了 ${rewardPoints} 积分！\n可在【我的】中查看明细。`,
          buttons: [{ type: 'ok', text: '收下积分' }]
@@ -174,7 +213,7 @@ export default function MerchantProfile({ merchant, onBack }) {
   };
 
   const toggleLike = async (review) => {
-    WebApp.HapticFeedback.impactOccurred('light');
+    try { WebApp.HapticFeedback.impactOccurred('light'); } catch(e){}
     const newLikedStatus = !review.likedByMe;
     const newLikesCount = review.likes + (newLikedStatus ? 1 : -1);
 
@@ -194,22 +233,47 @@ export default function MerchantProfile({ merchant, onBack }) {
 
   return (
     <div className="space-y-5 pb-20">
-      {/* Cover Image */}
-      {data.media_urls?.[0] && (
-        <div className="relative aspect-[4/3] -mx-4 -mt-5 overflow-hidden">
-           <img src={data.media_urls[0].url} alt={data.name} className="w-full h-full object-cover" />
-           <div className="absolute inset-0 bg-gradient-to-t from-tg-bg via-transparent to-black/20" />
-           
-           <div className="absolute top-3 left-3 right-3 flex justify-between items-center">
-              <div className="px-2.5 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-bold text-white flex items-center gap-1.5">
-                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> 营业中
-              </div>
-              <button onClick={handleShare} className="p-2 bg-black/40 backdrop-blur-md rounded-xl border border-white/20 text-white active:scale-95 transition-all">
-                 <Share2 size={15} />
-              </button>
-           </div>
-        </div>
-      )}
+      {/* Cover Image Carousel */}
+      {(() => {
+        let images = [];
+        try {
+          let media = data.media_urls;
+          if (typeof media === 'string') media = JSON.parse(media);
+          if (Array.isArray(media) && media.length > 0) {
+             images = media.map(m => m?.url || m).filter(Boolean);
+          }
+        } catch (e) { }
+
+        if (images.length === 0) return null;
+
+        return (
+          <div className="relative aspect-[4/3] -mx-4 -mt-5 overflow-hidden group">
+            <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory no-scrollbar bg-gray-100" style={{ scrollBehavior: 'smooth' }}>
+               {images.map((img, i) => (
+                 <img key={i} src={img} alt={data.name} className="w-full h-full object-cover flex-shrink-0 snap-center" />
+               ))}
+            </div>
+            
+            {images.length > 1 && (
+               <div className="absolute top-1/2 right-3 -translate-y-1/2 flex flex-col gap-1.5 z-10 bg-black/40 px-1 py-1.5 rounded-full backdrop-blur-md">
+                  {images.map((_, i) => (
+                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/80" />
+                  ))}
+               </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-tg-bg via-transparent to-black/20 pointer-events-none" />
+            
+            <div className="absolute top-3 left-3 right-3 flex justify-between items-center z-10 pointer-events-none">
+               <div className="px-2.5 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-bold text-white flex items-center gap-1.5 shadow-sm pointer-events-auto">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> 营业中
+               </div>
+               <button onClick={handleShare} className="p-2 bg-black/40 backdrop-blur-md rounded-xl border border-white/20 text-white active:scale-95 transition-all shadow-sm pointer-events-auto">
+                  <Share2 size={15} />
+               </button>
+            </div>
+          </div>
+        );
+      })()}
 
        {/* Profile Info */}
        <div className="px-1 space-y-4">
@@ -321,6 +385,36 @@ export default function MerchantProfile({ merchant, onBack }) {
                       readonly={true}
                     />
                  </div>
+                 {/* 社交主页链接 (Homepage URL) */}
+                 {data.homepage_url && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-black/5 mt-2">
+                       <a href={data.homepage_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[13px] font-bold active:scale-95 transition-transform truncate max-w-[85%]">
+                         <LinkIcon size={14} className="flex-shrink-0" />
+                         <span className="truncate">{data.homepage_url.replace(/^https?:\/\//, '')}</span>
+                       </a>
+                    </div>
+                 )}
+                 {/* 动态标签 (Tags) 用户打卡和+1 */}
+                 {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-black/5 mt-2 w-full">
+                       {tags.map(tag => (
+                          <button 
+                            key={tag.name}
+                            onClick={() => handleUpvoteTag(tag)}
+                            disabled={tag.votedByMe}
+                            className={clsx(
+                              "px-2.5 py-1 rounded-xl border font-bold text-xs flex items-center gap-1 transition-all",
+                              tag.votedByMe ? "bg-amber-100 border-amber-200 text-amber-600 shadow-sm" : "bg-white border-black/5 text-tg-hint active:scale-95 hover:bg-gray-50 active:bg-gray-100"
+                            )}
+                          >
+                            <span>{tag.name}</span>
+                            <span className={clsx("px-1.5 py-0.5 rounded-lg text-[9px] font-black", tag.votedByMe ? "bg-amber-200/60" : "bg-gray-100")}>
+                               +{tag.count}
+                            </span>
+                          </button>
+                       ))}
+                    </div>
+                 )}
                  {data.description && (
                    <div className="pt-2 border-t border-black/5">
                      <p className="text-sm text-tg-text leading-relaxed whitespace-pre-wrap">{data.description}</p>

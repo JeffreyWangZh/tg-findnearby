@@ -42,7 +42,7 @@ export const getCurrentTgUser = () => {
  */
 export const contactMerchantOwner = (ownerPath) => {
   if (!ownerPath) {
-    WebApp.showPopup({
+    safeShowPopup({
       title: '暂无联系方式',
       message: '该商户还未提供 Telegram 联系方式。',
       buttons: [{ type: 'ok', text: '知道了' }]
@@ -57,6 +57,37 @@ export const contactMerchantOwner = (ownerPath) => {
   }
 
   WebApp.openTelegramLink(targetUrl);
+};
+
+/**
+ * 兼容处理 showPopup 特性（6.2+ 才支持）
+ */
+export const safeShowPopup = (options) => {
+  if (WebApp.isVersionAtLeast && WebApp.isVersionAtLeast('6.2')) {
+    try {
+      WebApp.showPopup(options);
+      return;
+    } catch(e) {}
+  }
+  setTimeout(() => {
+    alert(`${options.title ? options.title + '\n\n' : ''}${options.message}`);
+  }, 10);
+};
+
+/**
+ * 兼容处理 showConfirm 特性（6.2+ 才支持）
+ */
+export const safeShowConfirm = (message, callback) => {
+  if (WebApp.isVersionAtLeast && WebApp.isVersionAtLeast('6.2')) {
+    try {
+      WebApp.showConfirm(message, callback);
+      return;
+    } catch(e) {}
+  }
+  setTimeout(() => {
+    const res = window.confirm(message);
+    callback(res);
+  }, 10);
 };
 
 export const FALLBACK_IMAGES = {

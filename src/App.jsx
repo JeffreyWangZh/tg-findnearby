@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { MapPin, User, LayoutGrid, Plus, ChevronLeft, ChevronDown } from 'lucide-react'
+import { MapPin, User, LayoutGrid, Plus, ChevronLeft, ChevronDown, GraduationCap } from 'lucide-react'
 import AddMerchantForm from './components/AddMerchantForm'
 import ExploreTab from './components/ExploreTab'
 import UserProfile from './components/UserProfile'
+import MerchantTraining from './components/MerchantTraining'
 import MerchantProfile from './components/MerchantProfile'
 import LocationPicker from './components/LocationPicker'
 import { useCollections } from './hooks/useCollections'
@@ -14,6 +15,7 @@ import clsx from 'clsx'
 const NAV_ITEMS = [
   { id: 'explore', label: '发现', icon: LayoutGrid },
   { id: 'submit', label: '推荐', icon: Plus },
+  // { id: 'academy', label: '学堂', icon: GraduationCap },
   { id: 'profile', label: '我的', icon: User },
 ];
 
@@ -22,7 +24,7 @@ function App() {
     try {
       const saved = localStorage.getItem('last_geo');
       if (saved) return JSON.parse(saved);
-    } catch(e) {}
+    } catch (e) { }
     return { lat: 22.54, lng: 114.05 };
   };
 
@@ -49,11 +51,11 @@ function App() {
           setCurrentLocationName('未知街区');
         }
       } catch (err) {
-         console.error('Reverse geocode err:', err);
-         setCurrentLocationName('网络或定位异常');
+        console.error('Reverse geocode err:', err);
+        setCurrentLocationName('网络或定位异常');
       }
     };
-    
+
     // add small debounce delay to avoid spamming Nominatim when modal dragging
     const timerId = setTimeout(fetchLocationName, 800);
     return () => clearTimeout(timerId);
@@ -92,7 +94,7 @@ function App() {
           前往 Telegram 打开
         </button>
       </div>
-    ); s
+    );
   }
 
   return (
@@ -109,16 +111,21 @@ function App() {
               <MapPin size={16} className="text-white" />
             </button>
           )}
-          <div 
-            className={clsx("flex flex-col cursor-pointer active:opacity-70 transition-opacity min-w-0 pr-2", selectedMerchant && 'pointer-events-none')} 
+          <div
+            className={clsx("flex flex-col cursor-pointer active:opacity-70 transition-opacity min-w-0 pr-2", selectedMerchant && 'pointer-events-none')}
             onClick={() => !selectedMerchant && setLocationModalOpen(true)}
           >
             <h1 className="text-lg font-black text-tg-text truncate flex items-center gap-1">
-              {selectedMerchant ? '商户详情' : currentLocationName}
+              {selectedMerchant ? '商户详情' : (activeTab === 'academy' ? '商家学堂' : currentLocationName)}
             </h1>
-            {!selectedMerchant && (
+            {!selectedMerchant && activeTab !== 'academy' && (
               <span className="text-[10px] text-blue-500 font-bold flex items-center gap-0.5 mt-0.5">
                 更改位置 <ChevronDown size={11} strokeWidth={3} />
+              </span>
+            )}
+            {!selectedMerchant && activeTab === 'academy' && (
+              <span className="text-[10px] text-tg-hint font-bold flex items-center gap-0.5 mt-0.5">
+                成长与运营指南
               </span>
             )}
           </div>
@@ -181,6 +188,18 @@ function App() {
                   <UserProfile collections={collections} setTag={setTag} />
                 </motion.div>
               )}
+
+              {activeTab === 'academy' && (
+                <motion.div
+                  key="academy"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <MerchantTraining />
+                </motion.div>
+              )}
             </>
           )}
         </AnimatePresence>
@@ -189,7 +208,7 @@ function App() {
       {/* Location Selection Modal */}
       <AnimatePresence>
         {isLocationModalOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: '100%' }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: '100%' }}
@@ -197,24 +216,24 @@ function App() {
             className="fixed inset-0 z-[100] bg-white flex flex-col"
             style={{ backgroundColor: 'var(--tg-theme-bg-color, #ffffff)' }}
           >
-             <div className="flex items-center justify-between p-4 border-b border-black/5">
-                 <h2 className="text-lg font-black text-tg-text">选择要探索的位置</h2>
-                 <button onClick={() => setLocationModalOpen(false)} className="text-blue-500 font-bold active:scale-95">关闭</button>
-             </div>
-             <div className="flex-1 bg-gray-50 relative p-4">
-                 <LocationPicker 
-                    geo={currentGeo} 
-                    onChange={(newGeo) => {
-                       setCurrentGeo(newGeo);
-                       // localStorage set happens inside LocationPicker automatically
-                    }} 
-                 />
-             </div>
-             <div className="p-4 pb-8 border-t border-black/5 flex shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-                 <button onClick={() => setLocationModalOpen(false)} className="tg-button flex-1 py-4 font-bold text-lg shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-transform">
-                    确认位置，探索周边
-                 </button>
-             </div>
+            <div className="flex items-center justify-between p-4 border-b border-black/5">
+              <h2 className="text-lg font-black text-tg-text">选择要探索的位置</h2>
+              <button onClick={() => setLocationModalOpen(false)} className="text-blue-500 font-bold active:scale-95">关闭</button>
+            </div>
+            <div className="flex-1 bg-gray-50 relative p-4">
+              <LocationPicker
+                geo={currentGeo}
+                onChange={(newGeo) => {
+                  setCurrentGeo(newGeo);
+                  // localStorage set happens inside LocationPicker automatically
+                }}
+              />
+            </div>
+            <div className="p-4 pb-8 border-t border-black/5 flex shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+              <button onClick={() => setLocationModalOpen(false)} className="tg-button flex-1 py-4 font-bold text-lg shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-transform">
+                确认位置，探索周边
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

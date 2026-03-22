@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Target, CheckCircle2, Loader2, Star, Target as TargetIcon } from 'lucide-react';
+import { MapPin, Target, CheckCircle2, Loader2, Star, Target as TargetIcon, Search, Filter } from 'lucide-react';
 import clsx from 'clsx';
 import { supabase } from '../lib/supabase';
 
@@ -11,6 +11,12 @@ export default function ExploreTab({ currentGeo, collections, setTag, onAddClick
   const [activeFilter, setActiveFilter] = useState('全部');
   const [merchants, setMerchants] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Extract unique tags assigned by the user to ANY merchant
+  const availableTags = Array.from(new Set(Object.values(collections).map(v => v.tag).filter(Boolean)));
 
   // Haversine formula calculation for real-world distance
   const getDistanceNum = (lat1, lon1, lat2, lon2) => {
@@ -60,6 +66,15 @@ export default function ExploreTab({ currentGeo, collections, setTag, onAddClick
        if (activeFilter === '活动精选') return m.deal_title || m.is_sponsored;
        return true;
     })
+    .filter(m => {
+       if (!searchQuery.trim()) return true;
+       return m.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+    })
+    .filter(m => {
+       if (selectedTags.length === 0) return true;
+       const userTag = collections[m.id]?.tag;
+       return selectedTags.includes(userTag);
+    })
     .sort((a,b) => {
        // Sponsored ALWAYS overrides distance and stays sticky physically on top
        if (a.is_sponsored && !b.is_sponsored) return -1;
@@ -102,10 +117,75 @@ export default function ExploreTab({ currentGeo, collections, setTag, onAddClick
         ))}
       </div> */}
 
-      {/* Merchants Feed */}
+      {/* Filter Stats Feed */}
       <div className="space-y-4 pt-2">
-        <div className="flex items-center justify-between px-1 mb-2">
-          <h3 className="text-lg font-black text-tg-text">最新好店</h3>
+        {/* Search and Tag Dropdown */}
+        <div className="flex gap-2 relative px-1 z-30">
+          <div className="flex-1 bg-white rounded-xl shadow border border-black/5 flex items-center px-3 py-2">
+            <Search size={16} className="text-gray-400 mr-2 flex-shrink-0" />
+            <input 
+              type="text" 
+              placeholder="搜索商户名称..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="flex-1 text-[13px] outline-none bg-transparent placeholder-gray-400"
+            />
+          </div>
+          
+          <div className="relative">
+            <button 
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className={clsx(
+                "h-full px-3.5 bg-white rounded-xl shadow border border-black/5 flex items-center gap-1.5 text-[13px] font-bold transition-all active:scale-95",
+                selectedTags.length > 0 ? "text-blue-600 border-blue-200 bg-blue-50" : "text-tg-text"
+              )}
+            >
+              <Filter size={14} className={selectedTags.length > 0 ? "text-blue-500" : "text-gray-400"} /> 
+              {selectedTags.length > 0 ? `已选(${selectedTags.length})` : '标签筛选'}
+            </button>
+            
+            <AnimatePresence>
+              {isDropdownOpen && (
+                 <>
+                   <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
+                   <motion.div 
+                     initial={{ opacity: 0, y: 5 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     exit={{ opacity: 0, y: 5 }}
+                     transition={{ duration: 0.15 }}
+                     className="absolute right-0 top-full mt-2 w-[160px] bg-white rounded-2xl shadow-xl border border-black/5 p-1.5 z-50 flex flex-col gap-0.5"
+                   >
+                     {availableTags.length === 0 ? (
+                       <div className="p-3 text-center text-xs text-gray-400 font-medium">您还没有添加过任何店铺标签</div>
+                     ) : (
+                       availableTags.map(tag => {
+                          const isSelected = selectedTags.includes(tag);
+                          return (
+                            <button 
+                              key={tag}
+                              onClick={() => {
+                                setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+                              }}
+                              className={clsx(
+                                "text-left px-3 py-2 rounded-xl text-[13px] font-bold transition-colors flex items-center justify-between",
+                                isSelected ? "bg-blue-50 text-blue-600" : "hover:bg-gray-50 text-gray-700 active:bg-gray-100"
+                              )}
+                            >
+                              <span className="truncate pr-2">{tag}</span>
+                              {isSelected && <CheckCircle2 size={14} className="flex-shrink-0" />}
+                            </button>
+                          )
+                       })
+                     )}
+                   </motion.div>
+                 </>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between px-1 mb-2 mt-4">
+           <h3 className="text-lg font-black text-tg-text">最新好店</h3>
         </div>
 
         {/* Filter Bar */}
@@ -142,17 +222,19 @@ export default function ExploreTab({ currentGeo, collections, setTag, onAddClick
           filteredMerchants.map((merchant) => {
             const currentTag = collections[merchant.id]?.tag;
 
-            // 安全解析可能会被当做字符串加载的 JSONB
-            let imageUrl = null;
+            // Extract all media URLs
+            let images = [];
             try {
               let media = merchant.media_urls;
               if (typeof media === 'string') media = JSON.parse(media);
               if (Array.isArray(media) && media.length > 0) {
-                imageUrl = media[0]?.url || media[0];
+                 images = media.map(m => m?.url || m).filter(Boolean);
               }
             } catch (e) { }
 
-            imageUrl = imageUrl || FALLBACK_IMAGES[merchant.category] || FALLBACK_IMAGES['默认'];
+            if (images.length === 0) {
+               images = [FALLBACK_IMAGES[merchant.category] || FALLBACK_IMAGES['默认']];
+            }
 
             return (
               <motion.div
@@ -162,10 +244,23 @@ export default function ExploreTab({ currentGeo, collections, setTag, onAddClick
                 className="glass-card overflow-hidden active:scale-[0.98] transition-transform"
                 onClick={() => onMerchantClick(merchant)}
               >
-                <div className="w-full aspect-[2/1] bg-gray-100 relative">
-                  <img src={imageUrl} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-                  <div className="absolute bottom-3 left-3 flex gap-2">
+                <div className="w-full aspect-[2/1] bg-gray-100 relative group overflow-hidden">
+                  <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory no-scrollbar" style={{ scrollBehavior: 'smooth' }}>
+                     {images.map((img, i) => (
+                       <img key={i} src={img} className="w-full h-full object-cover flex-shrink-0 snap-center" />
+                     ))}
+                  </div>
+                  
+                  {images.length > 1 && (
+                     <div className="absolute top-3 right-3 flex gap-1 z-10 bg-black/40 px-1.5 py-1 rounded-full backdrop-blur-md">
+                        {images.map((_, i) => (
+                          <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/80" />
+                        ))}
+                     </div>
+                  )}
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute bottom-3 left-3 flex gap-2 pointer-events-none">
                     {merchant.is_sponsored && (
                       <span className="px-2 py-0.5 bg-rose-500/90 backdrop-blur-md rounded-full text-[10px] font-bold text-white shadow shadow-rose-500/20">
                         👑 赞助精选
