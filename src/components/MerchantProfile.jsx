@@ -6,6 +6,11 @@ import { supabase } from '../lib/supabase'
 import clsx from 'clsx'
 import LocationPicker from './LocationPicker'
 
+const CATEGORIES = [
+  "餐饮美食", "咖啡茶饮", "零售购物", 
+  "生活服务", "美容健身", "教育培训", "科技互联"
+];
+
 export default function MerchantProfile({ merchant, onBack }) {
   const [data, setData] = useState(merchant);
   const [reviews, setReviews] = useState([]);
@@ -15,9 +20,32 @@ export default function MerchantProfile({ merchant, onBack }) {
   const [submitting, setSubmitting] = useState(false);
   
   const currentUser = getCurrentTgUser();
-  const isCreator = data.submitter_tg_id === currentUser.id;
+  const isCreator = String(data.submitter_tg_id) === String(currentUser.id);
+
+  // 权限判定逻辑
+  // owner_tg_id: 创建商户时填写的老板 TG username
+  // submitter_tg_id: 谁提交/创建了这个商户
+  const ownerTgMatch = data.owner_tg_id && (
+    String(data.owner_tg_id).toLowerCase() === String(currentUser.username).toLowerCase() ||
+    String(data.owner_tg_id) === String(currentUser.id)
+  );
+
+  // 谁可以编辑？
+  // 1. 未认领商户 → 创建者可以编辑（除标签）
+  // 2. 已认领商户 → 认领的老板可以编辑
+  const canEdit = data.is_verified 
+    ? String(data.submitter_tg_id) === String(currentUser.id) // 已认领：只有绑定的老板能编辑
+    : isCreator; // 未认领：创建者可以编辑
+
+  // 谁可以认领？
+  // 必须：1. 商户未认领  2. 用户的 TG username/id 和 owner_tg_id 匹配  3. 不是创建者自己认领
+  const canClaim = !data.is_verified && ownerTgMatch;
 
   const [editForm, setEditForm] = useState({
+    name: data.name || '',
+    category: data.category || '',
+    owner_tg: data.owner_tg_id || '',
+    homepage_url: data.homepage_url || '',
     description: data.description || '',
     address: data.physical_address || '',
     geo: { lat: data.lat || 22.54, lng: data.lng || 114.05 },
@@ -115,12 +143,21 @@ export default function MerchantProfile({ merchant, onBack }) {
   };
 
   const handleClaim = () => {
+    // 二次校验：必须 owner_tg_id 匹配当前用户
+    if (!ownerTgMatch) {
+      safeShowPopup({ 
+        title: '⚠️ 无法认领', 
+        message: `此商户的老板 TG 信息为 "${data.owner_tg_id}"，与您的账号 (${currentUser.username}) 不符。\n\n只有商户登记的老板本人才能认领。`,
+        buttons: [{ type: 'ok', text: '知道了' }]
+      });
+      return;
+    }
     checkBalanceAndProceed(500, "认证为官方蓝V老板", async () => {
       await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: `官方认证蓝V - ${data.name}`, points: -500 });
       await supabase.from('merchants').update({ is_verified: true, submitter_tg_id: currentUser.id }).eq('id', data.id);
       setData({...data, is_verified: true, submitter_tg_id: currentUser.id});
       try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
-      safeShowPopup({ title: '💎 认领成功', message: '商铺已绑定您的账号！' });
+      safeShowPopup({ title: '💎 认领成功', message: '商铺已绑定您的账号！现在只有您可以编辑店铺信息。' });
     });
   };
 
@@ -133,14 +170,26 @@ export default function MerchantProfile({ merchant, onBack }) {
   };
 
   const saveEdits = async () => {
+    if (!editForm.name.trim()) {
+      safeShowPopup({ title: '提示', message: '商户名称不能为空', buttons: [{ type: 'ok' }] });
+      return;
+    }
     setSubmitting(true);
-    const { error } = await supabase.from('merchants').update({
-      description: editForm.description, physical_address: editForm.address,
-      lat: editForm.geo.lat, lng: editForm.geo.lng,
-      deal_title: editForm.deal_title, deal_points: editForm.deal_points
-    }).eq('id', data.id);
+    const updatePayload = {
+      name: editForm.name.trim(),
+      category: editForm.category,
+      owner_tg_id: editForm.owner_tg.trim(),
+      homepage_url: editForm.homepage_url.trim(),
+      description: editForm.description.trim(),
+      physical_address: editForm.address.trim(),
+      lat: editForm.geo.lat,
+      lng: editForm.geo.lng,
+      deal_title: editForm.deal_title,
+      deal_points: editForm.deal_points
+    };
+    const { error } = await supabase.from('merchants').update(updatePayload).eq('id', data.id);
     if (!error) {
-      setData({ ...data, description: editForm.description, physical_address: editForm.address, lat: editForm.geo.lat, lng: editForm.geo.lng, deal_title: editForm.deal_title, deal_points: editForm.deal_points });
+      setData({ ...data, ...updatePayload, physical_address: updatePayload.physical_address });
       setIsEditing(false);
       try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
     }
@@ -235,34 +284,83 @@ export default function MerchantProfile({ merchant, onBack }) {
 
       {/* ====== Info Area ====== */}
       <div className="px-1 space-y-4">
-        {/* Meta line */}
+        {/* Meta + Role Badge + Actions */}
         <div className="flex justify-between items-center">
-           <span className="text-[10px] text-tg-hint font-medium">提交于 {new Date(data.created_at).toLocaleDateString()}</span>
-           {isCreator && !isEditing ? (
-             <button onClick={() => setIsEditing(true)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-xs font-bold active:scale-95">
-               <Edit3 size={13} /> 编辑
-             </button>
-           ) : (!isCreator && !data.is_verified) ? (
-             <button onClick={handleClaim} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-xs font-bold active:scale-95">
-               <ShieldCheck size={14}/> 认领该店
-             </button>
-           ) : null}
+           <div className="flex items-center gap-2">
+             <span className="text-[10px] text-tg-hint font-medium">提交于 {new Date(data.created_at).toLocaleDateString()}</span>
+             {data.is_verified ? (
+               <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-500 text-[9px] font-black rounded-md">已认领</span>
+             ) : (
+               <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 text-[9px] font-black rounded-md">待认领</span>
+             )}
+           </div>
+           <div className="flex items-center gap-2">
+             {canEdit && !isEditing && (
+               <button onClick={() => setIsEditing(true)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-xs font-bold active:scale-95">
+                 <Edit3 size={13} /> 编辑
+               </button>
+             )}
+             {canClaim && (
+               <button onClick={handleClaim} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-600 rounded-xl text-xs font-bold active:scale-95">
+                 <ShieldCheck size={14}/> 认领该店
+               </button>
+             )}
+           </div>
         </div>
 
         {/* ====== EDIT MODE ====== */}
         {isEditing ? (
           <div className="space-y-3 glass-card p-4 border border-blue-500/30">
-             <p className="text-xs font-bold text-blue-500 mb-2">修改店铺信息 (仅老板可见)</p>
+             <p className="text-xs font-bold text-blue-500 mb-2">{data.is_verified ? '修改店铺信息 (老板专属)' : '修改店铺信息 (创建者编辑)'}</p>
+
+             {/* 商户名称 & 类目 */}
              <div>
-               <label className="text-xs text-tg-hint font-bold">详细地址</label>
-               <input type="text" value={editForm.address} onChange={e => setEditForm({...editForm, address: e.target.value})} className="tg-input py-2 mt-1" />
+               <label className="text-xs text-tg-hint font-bold">商户名称 <span className="text-red-500">*</span></label>
+               <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="tg-input py-2 mt-1" placeholder="商户名称" />
              </div>
-             <div className="aspect-[16/10] rounded-xl overflow-hidden my-3 border border-black/10 shadow-inner">
-                <LocationPicker geo={editForm.geo} onChange={(geo) => setEditForm({ ...editForm, geo })} />
+             <div>
+               <label className="text-xs text-tg-hint font-bold">经营类目</label>
+               <select className="tg-input py-2 mt-1 appearance-none bg-white" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}>
+                 <option value="">请选择类目</option>
+                 {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+               </select>
              </div>
+
+             <hr className="border-black/5 border-dashed" />
+
+             {/* 联系方式 & 主页 */}
+             <div>
+               <label className="text-xs text-tg-hint font-bold">联系/社媒主页链接</label>
+               <div className="relative">
+                 <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                 <input type="text" placeholder="https://..." className="tg-input py-2 mt-1 pl-9" value={editForm.homepage_url} onChange={e => setEditForm({...editForm, homepage_url: e.target.value})} />
+               </div>
+             </div>
+             <div>
+               <label className="text-xs text-tg-hint font-bold">老板 Telegram</label>
+               <div className="relative">
+                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-tg-hint text-sm font-medium">t.me/</div>
+                 <input type="text" placeholder="username" className="tg-input py-2 mt-1 pl-[3.5rem]" value={editForm.owner_tg} onChange={e => setEditForm({...editForm, owner_tg: e.target.value})} />
+               </div>
+             </div>
+
+             <hr className="border-black/5 border-dashed" />
+
+             {/* 店铺描述 */}
              <div>
                <label className="text-xs text-tg-hint font-bold">店铺描述</label>
-               <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="tg-input py-2 mt-1 resize-none h-20" />
+               <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="tg-input py-2 mt-1 resize-none h-20" placeholder="介绍一下这家店..." />
+             </div>
+
+             <hr className="border-black/5 border-dashed" />
+
+             {/* 详细地址 & 地图 */}
+             <div>
+               <label className="text-xs text-tg-hint font-bold">详细地址</label>
+               <input type="text" value={editForm.address} onChange={e => setEditForm({...editForm, address: e.target.value})} className="tg-input py-2 mt-1" placeholder="街道、楼栋、门牌号..." />
+             </div>
+             <div className="aspect-[16/10] rounded-xl overflow-hidden my-1 border border-black/10 shadow-inner">
+                <LocationPicker geo={editForm.geo} onChange={(geo) => setEditForm({ ...editForm, geo })} />
              </div>
              <div className="pt-3 border-t border-blue-500/20 mt-3">
                <p className="text-xs font-bold text-amber-500 mb-2.5 flex items-center gap-1.5"><Ticket size={14}/> 营销中心</p>
