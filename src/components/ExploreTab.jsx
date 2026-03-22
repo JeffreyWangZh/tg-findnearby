@@ -19,6 +19,7 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
     const { data, error } = await supabase
       .from('merchants')
       .select('*')
+      .order('is_sponsored', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false });
 
     if (!error) setMerchants(data || []);
@@ -102,6 +103,11 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
                   <img src={imageUrl} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
                   <div className="absolute bottom-3 left-3 flex gap-2">
+                    {merchant.is_sponsored && (
+                      <span className="px-2 py-0.5 bg-rose-500/90 backdrop-blur-md rounded-full text-[10px] font-bold text-white shadow shadow-rose-500/20">
+                        👑 赞助精选
+                      </span>
+                    )}
                     <span className="px-2 py-0.5 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-bold text-white border border-white/20">
                       {merchant.category}
                     </span>
@@ -110,9 +116,12 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
                 
                 <div className="p-4 space-y-3">
                   <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h4 className="text-lg font-black text-tg-text leading-tight truncate">{merchant.name}</h4>
-                      <p className="text-xs text-tg-hint mt-1 flex items-center gap-1 truncate max-w-[90%]">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <h4 className="text-lg font-black text-tg-text leading-tight truncate flex items-center gap-1.5">
+                        {merchant.name}
+                        {merchant.is_verified && <CheckCircle2 size={16} fill="currentColor" className="text-blue-500 text-white flex-shrink-0" />}
+                      </h4>
+                      <p className="text-xs text-tg-hint mt-1 flex items-center gap-1 truncate max-w-[95%]">
                         <MapPin size={12} className="flex-shrink-0" /> {merchant.physical_address}
                       </p>
                     </div>

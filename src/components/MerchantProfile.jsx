@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { MessageCircle, MapPin, Share2, CheckCircle, Edit3, Heart, Send, Loader2 } from 'lucide-react'
+import { MessageCircle, MapPin, Share2, CheckCircle, Edit3, Heart, Send, Loader2, ShieldCheck, Ticket, Zap } from 'lucide-react'
 import { contactMerchantOwner, getCurrentTgUser } from '../utils/telegram'
 import { supabase } from '../lib/supabase'
 import clsx from 'clsx'
@@ -19,7 +19,9 @@ export default function MerchantProfile({ merchant, onBack }) {
   const [editForm, setEditForm] = useState({
     description: data.description || '',
     address: data.physical_address || '',
-    geo: { lat: data.lat || 22.54, lng: data.lng || 114.05 }
+    geo: { lat: data.lat || 22.54, lng: data.lng || 114.05 },
+    deal_title: data.deal_title || '',
+    deal_points: data.deal_points || 0
   });
 
   useEffect(() => {
@@ -51,18 +53,68 @@ export default function MerchantProfile({ merchant, onBack }) {
     });
   };
 
+  const handleBoost = async () => {
+    WebApp.showConfirm("消耗 1000 积分将店铺置顶至首页精选，确认操作？", async (ok) => {
+      if (!ok) return;
+      setSubmitting(true);
+      await supabase.from('points_history').insert({
+        tg_user_id: currentUser.id, action: `购买首页爆量精选曝光`, points: -1000
+      });
+      await supabase.from('merchants').update({ is_sponsored: true }).eq('id', data.id);
+      setData({...data, is_sponsored: true});
+      setSubmitting(false);
+      WebApp.HapticFeedback.notificationOccurred('success');
+      WebApp.showPopup({ title: '👑 置顶成功', message: '您的店铺已被置顶展示！' });
+    });
+  };
+
+  const handleClaim = () => {
+    WebApp.showConfirm("需支付 500 积分认证成为官方蓝V老板，开启专属营销权限全功能，是否确认？", async (ok) => {
+      if (!ok) return;
+      setSubmitting(true);
+      await supabase.from('points_history').insert({
+        tg_user_id: currentUser.id, action: `官方认证蓝V - ${data.name}`, points: -500
+      });
+      await supabase.from('merchants').update({
+        is_verified: true,
+        submitter_tg_id: currentUser.id
+      }).eq('id', data.id);
+      setData({...data, is_verified: true, submitter_tg_id: currentUser.id});
+      setSubmitting(false);
+      WebApp.HapticFeedback.notificationOccurred('success');
+      WebApp.showPopup({ title: '💎 认领成功', message: '您现在享有该店的完全编辑与营销配置权限！' });
+    });
+  };
+
+  const handleBuyDeal = () => {
+    WebApp.showConfirm(`将扣除 ${data.deal_points} 积分抢购 [${data.deal_title}]，不可退换。确认兑换？`, async (ok) => {
+      if (!ok) return;
+      setSubmitting(true);
+      await supabase.from('points_history').insert({
+        tg_user_id: currentUser.id, action: `购买特权 - ${data.deal_title}`, points: -data.deal_points
+      });
+      setSubmitting(false);
+      WebApp.HapticFeedback.notificationOccurred('success');
+      WebApp.showPopup({ title: '🎉 兑换成功', message: `请向商家出示此购买记录以核销 ${data.deal_title}` });
+    });
+  };
+
   const saveEdits = async () => {
     setSubmitting(true);
     const { error } = await supabase
       .from('merchants')
       .update({
         description: editForm.description,
-        physical_address: editForm.address
+        physical_address: editForm.address,
+        lat: editForm.geo.lat,
+        lng: editForm.geo.lng,
+        deal_title: editForm.deal_title,
+        deal_points: editForm.deal_points
       })
       .eq('id', data.id);
 
     if (!error) {
-      setData({ ...data, description: editForm.description, physical_address: editForm.address });
+      setData({ ...data, description: editForm.description, physical_address: editForm.address, lat: editForm.geo.lat, lng: editForm.geo.lng, deal_title: editForm.deal_title, deal_points: editForm.deal_points });
       setIsEditing(false);
       WebApp.HapticFeedback.notificationOccurred('success');
     }
@@ -142,97 +194,139 @@ export default function MerchantProfile({ merchant, onBack }) {
         </div>
       )}
 
-      {/* Profile Info */}
-      <div className="px-1 space-y-4">
-         <div className="flex justify-between items-start">
-            <div>
-               <h2 className="text-xl font-black text-tg-text flex items-center gap-2">
-                  {data.name} 
-                  {data.status === 'approved' && <CheckCircle className="text-tg-link" size={18} />}
-               </h2>
-               <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs font-bold text-tg-link">{data.category}</span>
+       {/* Profile Info */}
+       <div className="px-1 space-y-4">
+          <div className="flex justify-between items-start">
+             <div>
+                <h2 className="text-xl font-black text-tg-text flex items-center gap-2">
+                   {data.name} 
+                   {data.is_verified && <CheckCircle className="text-blue-500" size={18} fill="currentColor" color="white" />}
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                   <span className="text-xs font-bold text-tg-link">{data.category}</span>
+                </div>
+             </div>
+             {isCreator && !isEditing ? (
+               <button 
+                 onClick={() => setIsEditing(true)}
+                 className="p-2 bg-blue-500/10 text-blue-500 rounded-xl"
+               >
+                 <Edit3 size={16} />
+               </button>
+             ) : (!isCreator && !data.is_verified) ? (
+               <button onClick={handleClaim} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-xs font-bold active:scale-95 shadow-sm">
+                 <ShieldCheck size={14}/> 认领该店
+               </button>
+             ) : null}
+          </div>
+
+          {/* Location & Description */}
+          {isEditing ? (
+            <div className="space-y-3 glass-card p-4 border border-blue-500/30">
+               <p className="text-xs font-bold text-blue-500 mb-2">修改店铺信息 (仅老板可见)</p>
+               <div>
+                 <label className="text-xs text-tg-hint font-bold">详细地址</label>
+                 <input 
+                   type="text" 
+                   value={editForm.address} 
+                   onChange={e => setEditForm({...editForm, address: e.target.value})} 
+                   className="tg-input py-2 mt-1" 
+                 />
+               </div>
+               <div className="aspect-[16/10] rounded-xl overflow-hidden my-3 border border-black/10 shadow-inner">
+                  <LocationPicker 
+                    geo={editForm.geo} 
+                    onChange={(geo) => setEditForm({ ...editForm, geo })}
+                  />
+               </div>
+               <div>
+                 <label className="text-xs text-tg-hint font-bold">店铺描述</label>
+                 <textarea 
+                   value={editForm.description} 
+                   onChange={e => setEditForm({...editForm, description: e.target.value})} 
+                   className="tg-input py-2 mt-1 resize-none h-20" 
+                 />
+               </div>
+
+               {/* 营销增值模块 */}
+               <div className="pt-3 border-t border-blue-500/20 mt-3">
+                 <p className="text-xs font-bold text-amber-500 mb-2.5 flex items-center gap-1.5"><Ticket size={14}/> 营销中心：发放引流获客券</p>
+                 <div className="flex gap-2">
+                    <div className="flex-[2]">
+                      <label className="text-[10px] text-tg-hint font-bold">福利名称 (如: 5折咖啡券)</label>
+                      <input type="text" placeholder="留空则不发放" value={editForm.deal_title} onChange={e => setEditForm({...editForm, deal_title: e.target.value})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-tg-hint font-bold">单份兑换(积分)</label>
+                      <input type="number" min="0" value={editForm.deal_points} onChange={e => setEditForm({...editForm, deal_points: parseInt(e.target.value) || 0})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
+                    </div>
+                 </div>
+               </div>
+
+               {!data.is_sponsored && (
+                 <button onClick={handleBoost} type="button" className="w-full mt-3 py-3 rounded-xl border border-rose-500/30 text-rose-500 bg-rose-500/5 font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all">
+                   <Zap size={16} /> 消耗 1000 积分将店铺在首页置顶
+                 </button>
+               )}
+
+               <div className="flex gap-2 mt-4 pt-3 border-t border-blue-500/20">
+                 <button 
+                   onClick={() => setIsEditing(false)} 
+                   className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-600 font-bold text-sm active:scale-95 transition-all"
+                   style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color)' }}
+                 >
+                   取消
+                 </button>
+                 <button 
+                   onClick={saveEdits} 
+                   disabled={submitting}
+                   className="flex-[2] py-2.5 rounded-xl bg-blue-500 text-white font-bold text-sm flex justify-center items-center gap-2 shadow-md shadow-blue-500/20 active:scale-95 transition-all"
+                 >
+                   {submitting ? <Loader2 size={16} className="animate-spin" /> : '确认发布'}
+                 </button>
                </div>
             </div>
-            {isCreator && !isEditing && (
-              <button 
-                onClick={() => setIsEditing(true)}
-                className="p-2 bg-blue-500/10 text-blue-500 rounded-xl"
-              >
-                <Edit3 size={16} />
-              </button>
-            )}
-         </div>
-
-         {/* Location & Description */}
-         {isEditing ? (
-           <div className="space-y-3 glass-card p-4 border border-blue-500/30">
-              <p className="text-xs font-bold text-blue-500 mb-2">修改店铺信息 (仅创建者可见)</p>
-              <div>
-                <label className="text-xs text-tg-hint font-bold">详细地址</label>
-                <input 
-                  type="text" 
-                  value={editForm.address} 
-                  onChange={e => setEditForm({...editForm, address: e.target.value})} 
-                  className="tg-input py-2 mt-1" 
-                />
+          ) : (
+            <div className="space-y-4">
+              <div className="p-3.5 glass-card space-y-3">
+                 <div className="flex items-start gap-3.5">
+                   <div className="p-2.5 bg-rose-500/10 rounded-xl text-rose-500">
+                      <MapPin size={18} />
+                   </div>
+                   <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-tg-hint">商户地址</p>
+                      <p className="text-sm font-bold text-tg-text pr-2 leading-tight">{data.physical_address}</p>
+                   </div>
+                 </div>
+                 <div className="aspect-[21/9] rounded-xl overflow-hidden border border-black/5 opacity-80 pointer-events-none">
+                    <LocationPicker 
+                      geo={{ lat: data.lat, lng: data.lng }} 
+                      readonly={true}
+                    />
+                 </div>
+                 {data.description && (
+                   <div className="pt-2 border-t border-black/5">
+                     <p className="text-sm text-tg-text leading-relaxed whitespace-pre-wrap">{data.description}</p>
+                   </div>
+                 )}
               </div>
-              <div className="aspect-[16/10] rounded-xl overflow-hidden my-3">
-                 <LocationPicker 
-                   geo={editForm.geo} 
-                   onChange={(geo) => setEditForm({ ...editForm, geo })}
-                 />
-              </div>
-              <div>
-                <label className="text-xs text-tg-hint font-bold">店铺描述</label>
-                <textarea 
-                  value={editForm.description} 
-                  onChange={e => setEditForm({...editForm, description: e.target.value})} 
-                  className="tg-input py-2 mt-1 resize-none" 
-                  rows={2}
-                />
-              </div>
-              <div className="flex gap-2 mt-2">
-                <button 
-                  onClick={() => setIsEditing(false)} 
-                  className="flex-1 py-2 rounded-xl bg-gray-200 text-gray-600 font-bold text-sm"
-                  style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color)' }}
-                >
-                  取消
-                </button>
-                <button 
-                  onClick={saveEdits} 
-                  disabled={submitting}
-                  className="flex-[2] py-2 rounded-xl bg-blue-500 text-white font-bold text-sm flex justify-center items-center gap-2"
-                >
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : '保存修改'}
-                </button>
-              </div>
-           </div>
-         ) : (
-           <div className="p-3.5 glass-card space-y-3">
-              <div className="flex items-start gap-3.5">
-                <div className="p-2.5 bg-rose-500/10 rounded-xl text-rose-500">
-                   <MapPin size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                   <p className="text-[10px] font-bold text-tg-hint">商户地址</p>
-                   <p className="text-sm font-bold text-tg-text">{data.physical_address}</p>
-                </div>
-              </div>
-              <div className="aspect-[21/9] rounded-xl overflow-hidden border border-black/5 opacity-80 pointer-events-none">
-                 <LocationPicker 
-                   geo={{ lat: data.lat, lng: data.lng }} 
-                   readonly={true}
-                 />
-              </div>
-              {data.description && (
-                <div className="pt-2 border-t border-black/5">
-                  <p className="text-sm text-tg-text leading-relaxed">{data.description}</p>
+              
+              {/* O2O 变现核心区 - Deal / Coupon Card */}
+              {data.deal_title && (
+                <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-lg shadow-orange-500/20 text-white flex justify-between items-center relative overflow-hidden transform active:scale-[0.98] transition-transform">
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl z-0" />
+                   <div className="z-10 flex-1 pr-4">
+                      <div className="flex items-center gap-1.5 text-white/90 text-[10px] font-bold mb-1 opacity-90"><Ticket size={14} /> 粉丝专属特供福利</div>
+                      <p className="text-lg font-black leading-tight drop-shadow-sm">{data.deal_title}</p>
+                      <p className="text-xs font-bold mt-1 text-white/90 bg-black/10 inline-block px-2 py-0.5 rounded pl-1">💎 兑换需 {data.deal_points} 积分</p>
+                   </div>
+                   <button onClick={handleBuyDeal} disabled={submitting} className="z-10 flex-shrink-0 px-4 py-2 bg-white text-orange-500 rounded-xl font-black text-sm shadow-sm active:scale-90 transition-transform disabled:opacity-50 tracking-wide">
+                      抢名额
+                   </button>
                 </div>
               )}
-           </div>
-         )}
+            </div>
+          )}
 
          {/* Contact Boss Button */}
          {data.owner_tg_id && (
