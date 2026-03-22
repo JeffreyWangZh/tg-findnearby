@@ -3,6 +3,9 @@ import WebApp from '@twa-dev/sdk'
 import { GraduationCap, MapPin, User, LayoutGrid, Plus } from 'lucide-react'
 import AddMerchantForm from './components/AddMerchantForm'
 import MerchantTraining from './components/MerchantTraining'
+import ExploreTab from './components/ExploreTab'
+import UserProfile from './components/UserProfile'
+import { useCollections } from './hooks/useCollections'
 import { motion, AnimatePresence } from 'framer-motion'
 import clsx from 'clsx'
 
@@ -15,6 +18,7 @@ const NAV_ITEMS = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('explore');
+  const { collections, setTag } = useCollections();
 
   useEffect(() => {
     if (activeTab !== 'explore') {
@@ -53,38 +57,12 @@ function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className="space-y-5"
             >
-              {/* Hero Card */}
-              <div className="p-6 glass-card flex flex-col items-center text-center space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center">
-                  <MapPin className="w-8 h-8 text-blue-500" />
-                </div>
-                <div className="space-y-1">
-                  <h2 className="text-lg font-black text-tg-text">发现附近好店</h2>
-                  <p className="text-sm text-tg-hint leading-relaxed">探索经过验证的优质本地商户</p>
-                </div>
-                <button 
-                  onClick={() => setActiveTab('submit')}
-                  className="tg-button mt-2"
-                >
-                  我来推荐商户
-                </button>
-              </div>
-
-              {/* Quick Stats */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { num: '128', label: '已入驻商户', color: 'text-blue-500' },
-                  { num: '56', label: '本周新增', color: 'text-emerald-500' },
-                  { num: '1.2k', label: '用户贡献', color: 'text-amber-500' },
-                ].map((stat, i) => (
-                  <div key={i} className="glass-card p-4 text-center space-y-1">
-                    <p className={clsx("text-xl font-black", stat.color)}>{stat.num}</p>
-                    <p className="text-[10px] font-bold text-tg-hint">{stat.label}</p>
-                  </div>
-                ))}
-              </div>
+              <ExploreTab 
+                collections={collections} 
+                setTag={setTag} 
+                onAddClick={() => setActiveTab('submit')} 
+              />
             </motion.div>
           )}
 
@@ -115,13 +93,12 @@ function App() {
           {activeTab === 'profile' && (
             <motion.div 
               key="profile"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center min-h-[50vh] text-tg-hint gap-3"
+              initial={{ opacity: 0, x: -15 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 15 }}
+              transition={{ duration: 0.2 }}
             >
-              <User size={40} className="opacity-30" />
-              <p className="text-sm font-bold">个人中心即将上线</p>
-              <p className="text-xs opacity-60">敬请期待</p>
+              <UserProfile collections={collections} setTag={setTag} />
             </motion.div>
           )}
         </AnimatePresence>
