@@ -6,11 +6,31 @@ import { supabase } from '../lib/supabase';
 
 import { FALLBACK_IMAGES } from '../utils/telegram';
 
-export default function ExploreTab({ collections, setTag, onAddClick, onMerchantClick }) {
+export default function ExploreTab({ currentGeo, collections, setTag, onAddClick, onMerchantClick }) {
   const FILTERS = ['全部', '最新探店', '品牌认领', '活动精选'];
   const [activeFilter, setActiveFilter] = useState('全部');
   const [merchants, setMerchants] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Haversine formula calculation for real-world distance
+  const getDistanceNum = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
+    const R = 6371; 
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c;
+  };
+
+  const formatDistance = (dist) => {
+    if (dist === Infinity) return '';
+    if (dist < 1) return (dist * 1000).toFixed(0) + 'm';
+    return dist.toFixed(1) + 'km';
+  };
 
   useEffect(() => {
     fetchMerchants();
@@ -28,12 +48,25 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
     setLoading(false);
   };
 
-  const filteredMerchants = merchants.filter(m => {
-    if (activeFilter === '最新探店') return (m.reviews?.length || 0) < 5;
-    if (activeFilter === '品牌认领') return m.is_verified;
-    if (activeFilter === '活动精选') return m.deal_title || m.is_sponsored;
-    return true;
-  });
+  const filteredMerchants = merchants
+    .map(m => {
+       const distNum = getDistanceNum(currentGeo?.lat, currentGeo?.lng, m.lat, m.lng);
+       return { ...m, distanceNum: distNum, distanceStr: formatDistance(distNum) };
+    })
+    .filter(m => m.distanceNum <= 80) // Only show merchants within an 80km radius of the selected city/point
+    .filter(m => {
+       if (activeFilter === '最新探店') return (m.reviews?.length || 0) < 5;
+       if (activeFilter === '品牌认领') return m.is_verified;
+       if (activeFilter === '活动精选') return m.deal_title || m.is_sponsored;
+       return true;
+    })
+    .sort((a,b) => {
+       // Sponsored ALWAYS overrides distance and stays sticky physically on top
+       if (a.is_sponsored && !b.is_sponsored) return -1;
+       if (!a.is_sponsored && b.is_sponsored) return 1;
+       // Afterwards, sort strictly by physical distance to the user's selected location map pin
+       return a.distanceNum - b.distanceNum;
+    });
 
   return (
     <div className="space-y-2 pb-8">
@@ -152,7 +185,9 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
                         {merchant.is_verified && <CheckCircle2 size={16} fill="currentColor" className="text-blue-500 text-white flex-shrink-0" />}
                       </h4>
                       <p className="text-xs text-tg-hint mt-1 flex items-center gap-1 truncate max-w-[95%]">
-                        <MapPin size={12} className="flex-shrink-0" /> {merchant.physical_address}
+                        <MapPin size={12} className="flex-shrink-0" />
+                        {merchant.distanceStr && <span className="font-bold text-blue-500 whitespace-nowrap">{merchant.distanceStr}</span>}
+                        <span className="truncate">{merchant.physical_address}</span>
                       </p>
                     </div>
                     {/* Tag Buttons */}

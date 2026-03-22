@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { MapPin, User, LayoutGrid, Plus, ChevronLeft } from 'lucide-react'
+import { MapPin, User, LayoutGrid, Plus, ChevronLeft, ChevronDown } from 'lucide-react'
 import AddMerchantForm from './components/AddMerchantForm'
 import ExploreTab from './components/ExploreTab'
 import UserProfile from './components/UserProfile'
 import MerchantProfile from './components/MerchantProfile'
+import LocationPicker from './components/LocationPicker'
 import { useCollections } from './hooks/useCollections'
 import { isTelegramEnvironment } from './utils/telegram'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -17,14 +18,24 @@ const NAV_ITEMS = [
 ];
 
 function App() {
+  const getInitialGeo = () => {
+    try {
+      const saved = localStorage.getItem('last_geo');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return { lat: 22.54, lng: 114.05 };
+  };
+
   const [activeTab, setActiveTab] = useState('explore');
   const [selectedMerchant, setSelectedMerchant] = useState(null);
+  const [currentGeo, setCurrentGeo] = useState(getInitialGeo());
+  const [isLocationModalOpen, setLocationModalOpen] = useState(false);
   const { collections, setTag } = useCollections();
   const [isAuthorized, setIsAuthorized] = useState(true);
 
   useEffect(() => {
     setIsAuthorized(isTelegramEnvironment());
-    
+
     if (activeTab !== 'explore' || selectedMerchant) {
       WebApp.BackButton.show();
       const handler = () => {
@@ -44,18 +55,18 @@ function App() {
   if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center bg-gray-50 text-gray-800">
-         <div className="w-20 h-20 mb-6 bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20 transform -rotate-6">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10 ml-1"><path d="M15 10l-4 4l6 6l4-16l-18 7l4 2l2 6l3-4"></path></svg>
-         </div>
-         <h1 className="text-2xl font-black mb-3 text-gray-900 tracking-tight">请在 Telegram 中打开</h1>
-         <p className="text-sm font-medium text-gray-500 mb-8 px-4 leading-relaxed">
-           为保障您的账号和积分安全，<br/>本程序只允许在 Telegram 官方内开启。
-         </p>
-         <button onClick={() => window.location.href='https://t.me/your_bot_username'} className="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold shadow-md shadow-blue-500/20 active:scale-95 transition-transform flex items-center gap-2">
-            前往 Telegram 打开
-         </button>
+        <div className="w-20 h-20 mb-6 bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20 transform -rotate-6">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10 ml-1"><path d="M15 10l-4 4l6 6l4-16l-18 7l4 2l2 6l3-4"></path></svg>
+        </div>
+        <h1 className="text-2xl font-black mb-3 text-gray-900 tracking-tight">请在 Telegram 中打开</h1>
+        <p className="text-sm font-medium text-gray-500 mb-8 px-4 leading-relaxed">
+          为保障您的账号和积分安全，<br />本程序只允许在 Telegram 官方内开启。
+        </p>
+        <button onClick={() => window.location.href = 'https://t.me/findnearby007_bot'} className="px-6 py-3 bg-blue-500 text-white rounded-xl font-bold shadow-md shadow-blue-500/20 active:scale-95 transition-transform flex items-center gap-2">
+          前往 Telegram 打开
+        </button>
       </div>
-    );
+    ); s
   }
 
   return (
@@ -65,15 +76,18 @@ function App() {
         <div className="flex items-center gap-2">
           {selectedMerchant ? (
             <button onClick={() => setSelectedMerchant(null)} className="p-1 -ml-2 rounded-lg text-blue-500 hover:bg-blue-500/10">
-               <ChevronLeft size={24} />
+              <ChevronLeft size={24} />
             </button>
           ) : (
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+            <button onClick={() => setLocationModalOpen(true)} className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md active:scale-95 transition-all">
               <MapPin size={16} className="text-white" />
-            </div>
+            </button>
           )}
-          <h1 className="text-lg font-black text-tg-text">
-            {selectedMerchant ? '商户详情' : '附近脉动'}
+          <h1 
+            className="text-lg font-black text-tg-text flex items-center gap-1 active:opacity-70 transition-opacity cursor-pointer" 
+            onClick={() => !selectedMerchant && setLocationModalOpen(true)}
+          >
+            {selectedMerchant ? '商户详情' : '探索附近'} {(!selectedMerchant && <ChevronDown size={16} className="text-tg-hint"/>)}
           </h1>
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 rounded-full">
@@ -86,36 +100,37 @@ function App() {
       <main className="flex-1 px-4 py-5">
         <AnimatePresence mode="wait">
           {selectedMerchant ? (
-            <motion.div 
+            <motion.div
               key="detail"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.2 }}
             >
-               <MerchantProfile merchant={selectedMerchant} />
+              <MerchantProfile merchant={selectedMerchant} />
             </motion.div>
           ) : (
             <>
               {activeTab === 'explore' && (
-                <motion.div 
+                <motion.div
                   key="explore"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <ExploreTab 
-                    collections={collections} 
-                    setTag={setTag} 
-                    onAddClick={() => setActiveTab('submit')} 
+                  <ExploreTab
+                    currentGeo={currentGeo}
+                    collections={collections}
+                    setTag={setTag}
+                    onAddClick={() => setActiveTab('submit')}
                     onMerchantClick={setSelectedMerchant}
                   />
                 </motion.div>
               )}
 
               {activeTab === 'submit' && (
-                <motion.div 
+                <motion.div
                   key="submit"
                   initial={{ opacity: 0, scale: 0.98 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -127,7 +142,7 @@ function App() {
               )}
 
               {activeTab === 'profile' && (
-                <motion.div 
+                <motion.div
                   key="profile"
                   initial={{ opacity: 0, x: -15 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -141,6 +156,39 @@ function App() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Location Selection Modal */}
+      <AnimatePresence>
+        {isLocationModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="fixed inset-0 z-[100] bg-white flex flex-col"
+            style={{ backgroundColor: 'var(--tg-theme-bg-color, #ffffff)' }}
+          >
+             <div className="flex items-center justify-between p-4 border-b border-black/5">
+                 <h2 className="text-lg font-black text-tg-text">选择要探索的位置</h2>
+                 <button onClick={() => setLocationModalOpen(false)} className="text-blue-500 font-bold active:scale-95">关闭</button>
+             </div>
+             <div className="flex-1 bg-gray-50 relative p-4">
+                 <LocationPicker 
+                    geo={currentGeo} 
+                    onChange={(newGeo) => {
+                       setCurrentGeo(newGeo);
+                       // localStorage set happens inside LocationPicker automatically
+                    }} 
+                 />
+             </div>
+             <div className="p-4 pb-8 border-t border-black/5 flex shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+                 <button onClick={() => setLocationModalOpen(false)} className="tg-button flex-1 py-4 font-bold text-lg shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-transform">
+                    确认位置，探索周边
+                 </button>
+             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 px-4 pt-2.5 pb-7 backdrop-blur-2xl border-t border-black/5 flex justify-around z-[100]" style={{ backgroundColor: 'var(--tg-theme-bg-color, rgba(255,255,255,0.92))' }}>
@@ -164,7 +212,7 @@ function App() {
             </div>
             <span className="text-[10px] font-bold">{label}</span>
             {activeTab === id && !selectedMerchant && (
-              <motion.div 
+              <motion.div
                 layoutId="navDot"
                 className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-tg-link"
               />
