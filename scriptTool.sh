@@ -1,1 +1,1 @@
-git -C /Users/wangzenghui/Documents/TelegramApp add -A && git -C /Users/wangzenghui/Documents/TelegramApp commit -m "fix: set nominatim api language to zh for chinese location names" && git -C /Users/wangzenghui/Documents/TelegramApp push
+git -C /Users/wangzenghui/Documents/TelegramApp add -A && git -C /Users/wangzenghui/Documents/TelegramApp commit -m "fix: set nominatim api language to zh for chinese location names" && git -C /Users/wangzenghui/Documents/TelegramApp push origin dev/profile
