@@ -91,17 +91,23 @@ export default function AddMerchantForm({ onFinish }) {
     const urls = [];
     for (const item of formData.media) {
       const fileName = `merchants/${Date.now()}_${item.file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+      console.log('[Upload] Attempting upload:', fileName, 'size:', item.file.size);
       const { data, error } = await supabase.storage
         .from('merchant-media')
         .upload(fileName, item.file, { cacheControl: '3600', upsert: false });
       
+      if (error) {
+        console.error('[Upload] Failed:', error.message, error);
+      }
       if (!error && data) {
         const { data: publicUrl } = supabase.storage
           .from('merchant-media')
           .getPublicUrl(data.path);
+        console.log('[Upload] Success, publicUrl:', publicUrl.publicUrl);
         urls.push({ url: publicUrl.publicUrl, type: item.type });
       }
     }
+    console.log('[Upload] Final urls array:', urls);
     return urls;
   }
 
@@ -119,8 +125,16 @@ export default function AddMerchantForm({ onFinish }) {
         let mediaUrls = [];
         if (formData.media.length > 0) {
           mediaUrls = await uploadMedia();
+          if (mediaUrls.length === 0 && formData.media.length > 0) {
+            console.warn('[Submit] Photo upload returned 0 results for', formData.media.length, 'files — storage bucket may not exist');
+            safeShowPopup({ 
+              title: '⚠️ 照片上传失败', 
+              message: '照片未能上传成功，可能是存储桶尚未创建。商户信息仍会被提交，但不包含照片。\n\n请在 Supabase Dashboard 创建名为 merchant-media 的公共存储桶。' 
+            });
+          }
         }
 
+        console.log('[Submit] Inserting merchant with media_urls:', mediaUrls);
         const { data: insertedMerchant, error } = await supabase.from('merchants').insert({
           name: formData.name,
           category: formData.category,

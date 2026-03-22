@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import WebApp from '@twa-dev/sdk'
 import { MessageCircle, MapPin, Share2, CheckCircle, Edit3, Heart, Send, Loader2, ShieldCheck, Ticket, Zap, Link as LinkIcon, Plus } from 'lucide-react'
-import { contactMerchantOwner, getCurrentTgUser, safeShowPopup, safeShowConfirm } from '../utils/telegram'
+import { contactMerchantOwner, getCurrentTgUser, safeShowPopup, safeShowConfirm, FALLBACK_IMAGES } from '../utils/telegram'
 import { supabase } from '../lib/supabase'
 import clsx from 'clsx'
 import LocationPicker from './LocationPicker'
@@ -54,18 +54,12 @@ export default function MerchantProfile({ merchant, onBack }) {
   const handleUpvoteTag = async (tag) => {
     if (tag.votedByMe) return;
     try { WebApp.HapticFeedback.impactOccurred('light'); } catch (e) {}
-
-    // Optimistic UI update
     setTags(tags.map(t => t.name === tag.name ? { ...t, count: t.count + 1, votedByMe: true } : t));
-
     const { error } = await supabase.from('merchant_tag_votes').insert({
-       merchant_id: data.id,
-       tag_name: tag.name,
-       user_id: String(currentUser.id)
+       merchant_id: data.id, tag_name: tag.name, user_id: String(currentUser.id)
     });
     if (error) console.error("Upvote failed", error);
   };
-
 
   const fetchReviews = async () => {
     const { data: revs, error } = await supabase
@@ -76,8 +70,7 @@ export default function MerchantProfile({ merchant, onBack }) {
 
     if (!error && revs) {
       const formatted = revs.map(r => ({
-        ...r,
-        likedByMe: r.review_likes.some(like => like.tg_user_id === currentUser.id)
+        ...r, likedByMe: r.review_likes.some(like => like.tg_user_id === currentUser.id)
       }));
       setReviews(formatted);
     }
@@ -86,33 +79,26 @@ export default function MerchantProfile({ merchant, onBack }) {
   const handleContact = () => contactMerchantOwner(data.owner_tg_id);
 
   const handleShare = () => {
-    safeShowPopup({
-      message: '分享此商户给好友？',
-      buttons: [{ text: '立即分享', type: 'default' }, { text: '取消', type: 'cancel' }]
-    });
+    safeShowPopup({ message: '分享此商户给好友？', buttons: [{ text: '立即分享', type: 'default' }, { text: '取消', type: 'cancel' }] });
   };
 
   const checkBalanceAndProceed = async (cost, actionName, performAction) => {
     safeShowConfirm(`将消耗 ${cost} 积分执行 [${actionName}]，确认操作吗？`, async (ok) => {
       if (!ok) return;
-      
       setSubmitting(true);
-      // 实时的交易防击穿校验
       const { data: pts } = await supabase.from('points_history').select('points').eq('tg_user_id', currentUser.id);
       const currentBalance = (pts || []).reduce((acc, curr) => acc + curr.points, 0);
-      
       if (currentBalance < cost) {
         setSubmitting(false);
-        safeShowConfirm(`您的积分不足可怜 (余额: ${currentBalance} / 需要: ${cost})\n\n[测试环境特权] 是否要免费模拟 Telegram Stars 充值 5000 积分？`, async (rechargeOk) => {
+        safeShowConfirm(`积分不足 (余额: ${currentBalance} / 需要: ${cost})\n\n是否模拟充值 5000 积分？`, async (rechargeOk) => {
           if (rechargeOk) {
             try { WebApp.HapticFeedback.impactOccurred('medium'); } catch(e){}
             await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: '模拟代币充值 (Telegram Stars)', points: 5000 });
-            safeShowPopup({ title: '💎 到账成功', message: '测试充值 5000 积分已发放，请再次点击操作！' });
+            safeShowPopup({ title: '💎 到账成功', message: '测试充值 5000 积分已发放！' });
           }
         });
         return;
       }
-
       await performAction();
       setSubmitting(false);
     });
@@ -120,25 +106,18 @@ export default function MerchantProfile({ merchant, onBack }) {
 
   const handleBoost = () => {
     checkBalanceAndProceed(1000, "置顶至首页精选", async () => {
-      await supabase.from('points_history').insert({
-        tg_user_id: currentUser.id, action: `购买首页爆量精选曝光`, points: -1000
-      });
+      await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: '购买首页爆量精选曝光', points: -1000 });
       await supabase.from('merchants').update({ is_sponsored: true }).eq('id', data.id);
       setData({...data, is_sponsored: true});
       try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
-      safeShowPopup({ title: '👑 置顶成功', message: '交易达成！您的店铺已置顶。' });
+      safeShowPopup({ title: '👑 置顶成功', message: '您的店铺已置顶。' });
     });
   };
 
   const handleClaim = () => {
     checkBalanceAndProceed(500, "认证为官方蓝V老板", async () => {
-      await supabase.from('points_history').insert({
-        tg_user_id: currentUser.id, action: `官方认证蓝V - ${data.name}`, points: -500
-      });
-      await supabase.from('merchants').update({
-        is_verified: true,
-        submitter_tg_id: currentUser.id
-      }).eq('id', data.id);
+      await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: `官方认证蓝V - ${data.name}`, points: -500 });
+      await supabase.from('merchants').update({ is_verified: true, submitter_tg_id: currentUser.id }).eq('id', data.id);
       setData({...data, is_verified: true, submitter_tg_id: currentUser.id});
       try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
       safeShowPopup({ title: '💎 认领成功', message: '商铺已绑定您的账号！' });
@@ -147,32 +126,23 @@ export default function MerchantProfile({ merchant, onBack }) {
 
   const handleBuyDeal = () => {
     checkBalanceAndProceed(data.deal_points, `抢购: ${data.deal_title}`, async () => {
-      await supabase.from('points_history').insert({
-        tg_user_id: currentUser.id, action: `抢购营销特卖 - ${data.deal_title}`, points: -data.deal_points
-      });
+      await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: `抢购营销特卖 - ${data.deal_title}`, points: -data.deal_points });
       try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
-      safeShowPopup({ title: '🎉 兑换成功', message: `请向商家出示此购买明细以核销。` });
+      safeShowPopup({ title: '🎉 兑换成功', message: '请向商家出示此购买明细以核销。' });
     });
   };
 
   const saveEdits = async () => {
     setSubmitting(true);
-    const { error } = await supabase
-      .from('merchants')
-      .update({
-        description: editForm.description,
-        physical_address: editForm.address,
-        lat: editForm.geo.lat,
-        lng: editForm.geo.lng,
-        deal_title: editForm.deal_title,
-        deal_points: editForm.deal_points
-      })
-      .eq('id', data.id);
-
+    const { error } = await supabase.from('merchants').update({
+      description: editForm.description, physical_address: editForm.address,
+      lat: editForm.geo.lat, lng: editForm.geo.lng,
+      deal_title: editForm.deal_title, deal_points: editForm.deal_points
+    }).eq('id', data.id);
     if (!error) {
       setData({ ...data, description: editForm.description, physical_address: editForm.address, lat: editForm.geo.lat, lng: editForm.geo.lng, deal_title: editForm.deal_title, deal_points: editForm.deal_points });
       setIsEditing(false);
-      WebApp.HapticFeedback.notificationOccurred('success');
+      try { WebApp.HapticFeedback.notificationOccurred('success'); } catch(e){}
     }
     setSubmitting(false);
   };
@@ -180,34 +150,15 @@ export default function MerchantProfile({ merchant, onBack }) {
   const submitReview = async () => {
     if (!newReview.trim()) return;
     setSubmitting(true);
-    
-    // 模拟积分奖励 5-10
     const rewardPoints = Math.floor(Math.random() * 5) + 5;
-
-    const { error } = await supabase
-      .from('reviews')
-      .insert({
-        merchant_id: data.id,
-        tg_user_id: currentUser.id,
-        tg_username: currentUser.username,
-        content: newReview.trim()
-      });
-
+    const { error } = await supabase.from('reviews').insert({
+      merchant_id: data.id, tg_user_id: currentUser.id, tg_username: currentUser.username, content: newReview.trim()
+    });
     if (!error) {
-      // 记录积分历史
-      await supabase.from('points_history').insert({
-        tg_user_id: currentUser.id,
-        action: `发布评价 - ${data.name.substring(0, 10)}`,
-        points: rewardPoints
-      });
-
+      await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: `发布评价 - ${data.name.substring(0, 10)}`, points: rewardPoints });
       setNewReview('');
       fetchReviews();
-      safeShowPopup({
-         title: '🌟 评价发布成功',
-         message: `感谢您的分享！系统赠送了 ${rewardPoints} 积分！\n可在【我的】中查看明细。`,
-         buttons: [{ type: 'ok', text: '收下积分' }]
-      });
+      safeShowPopup({ title: '🌟 评价发布成功', message: `感谢您的分享！系统赠送了 ${rewardPoints} 积分！`, buttons: [{ type: 'ok', text: '收下积分' }] });
     }
     setSubmitting(false);
   };
@@ -216,12 +167,7 @@ export default function MerchantProfile({ merchant, onBack }) {
     try { WebApp.HapticFeedback.impactOccurred('light'); } catch(e){}
     const newLikedStatus = !review.likedByMe;
     const newLikesCount = review.likes + (newLikedStatus ? 1 : -1);
-
-    // 乐观更新 UI
-    setReviews(reviews.map(r => 
-      r.id === review.id ? { ...r, likedByMe: newLikedStatus, likes: newLikesCount } : r
-    ));
-
+    setReviews(reviews.map(r => r.id === review.id ? { ...r, likedByMe: newLikedStatus, likes: newLikesCount } : r));
     if (newLikedStatus) {
       await supabase.from('review_likes').insert({ review_id: review.id, tg_user_id: currentUser.id });
       await supabase.from('reviews').update({ likes: newLikesCount }).eq('id', review.id);
@@ -231,252 +177,252 @@ export default function MerchantProfile({ merchant, onBack }) {
     }
   };
 
+  // --- Extract images ---
+  let images = [];
+  try {
+    let media = data.media_urls;
+    if (typeof media === 'string') media = JSON.parse(media);
+    if (Array.isArray(media) && media.length > 0) {
+       images = media.map(m => m?.url || m).filter(Boolean);
+    }
+  } catch (e) { }
+  if (images.length === 0) {
+    images = [FALLBACK_IMAGES[data.category] || FALLBACK_IMAGES['默认']];
+  }
+
   return (
     <div className="space-y-5 pb-20">
-      {/* Cover Image Carousel */}
-      {(() => {
-        let images = [];
-        try {
-          let media = data.media_urls;
-          if (typeof media === 'string') media = JSON.parse(media);
-          if (Array.isArray(media) && media.length > 0) {
-             images = media.map(m => m?.url || m).filter(Boolean);
-          }
-        } catch (e) { }
+      {/* ====== Cover Image ====== */}
+      <div className="relative aspect-[16/9] -mx-4 -mt-5 overflow-hidden bg-gray-100">
+        <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory no-scrollbar" style={{ scrollBehavior: 'smooth' }}>
+           {images.map((img, i) => (
+             <img key={i} src={img} alt={data.name} className="w-full h-full object-cover flex-shrink-0 snap-center" />
+           ))}
+        </div>
+        {images.length > 1 && (
+           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 bg-black/40 px-2 py-1 rounded-full backdrop-blur-md">
+              {images.map((_, i) => <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/70" />)}
+           </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 pointer-events-none" />
+        
+        {/* Top badges */}
+        <div className="absolute top-3 left-3 right-3 flex justify-between items-center z-10">
+           <div className="flex items-center gap-2">
+             <span className="px-2.5 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-bold text-white flex items-center gap-1.5">
+               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> 营业中
+             </span>
+             {data.is_sponsored && (
+                <span className="px-2.5 py-1 bg-rose-500/90 backdrop-blur-md rounded-full text-[10px] font-bold text-white">👑 赞助精选</span>
+             )}
+           </div>
+           <button onClick={handleShare} className="p-2 bg-black/40 backdrop-blur-md rounded-xl border border-white/20 text-white active:scale-95 transition-all">
+              <Share2 size={15} />
+           </button>
+        </div>
 
-        if (images.length === 0) return null;
+        {/* Name overlay on image */}
+        <div className="absolute bottom-4 left-4 right-4 z-10 pointer-events-none">
+           <h2 className="text-2xl font-black text-white drop-shadow-lg flex items-center gap-2 leading-none">
+              {data.name}
+              {data.is_verified && <CheckCircle className="text-blue-400 flex-shrink-0" size={20} fill="currentColor" color="white" />}
+           </h2>
+           <span className="mt-1.5 inline-block px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-md text-[11px] font-bold text-white border border-white/10">
+             {data.category}
+           </span>
+        </div>
+      </div>
 
-        return (
-          <div className="relative aspect-[4/3] -mx-4 -mt-5 overflow-hidden group">
-            <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory no-scrollbar bg-gray-100" style={{ scrollBehavior: 'smooth' }}>
-               {images.map((img, i) => (
-                 <img key={i} src={img} alt={data.name} className="w-full h-full object-cover flex-shrink-0 snap-center" />
-               ))}
-            </div>
-            
-            {images.length > 1 && (
-               <div className="absolute top-1/2 right-3 -translate-y-1/2 flex flex-col gap-1.5 z-10 bg-black/40 px-1 py-1.5 rounded-full backdrop-blur-md">
-                  {images.map((_, i) => (
-                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/80" />
-                  ))}
-               </div>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-tg-bg via-transparent to-black/20 pointer-events-none" />
-            
-            <div className="absolute top-3 left-3 right-3 flex justify-between items-center z-10 pointer-events-none">
-               <div className="px-2.5 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-bold text-white flex items-center gap-1.5 shadow-sm pointer-events-auto">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> 营业中
-               </div>
-               <button onClick={handleShare} className="p-2 bg-black/40 backdrop-blur-md rounded-xl border border-white/20 text-white active:scale-95 transition-all shadow-sm pointer-events-auto">
-                  <Share2 size={15} />
-               </button>
-            </div>
-          </div>
-        );
-      })()}
+      {/* ====== Info Area ====== */}
+      <div className="px-1 space-y-4">
+        {/* Meta line */}
+        <div className="flex justify-between items-center">
+           <span className="text-[10px] text-tg-hint font-medium">提交于 {new Date(data.created_at).toLocaleDateString()}</span>
+           {isCreator && !isEditing ? (
+             <button onClick={() => setIsEditing(true)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-xs font-bold active:scale-95">
+               <Edit3 size={13} /> 编辑
+             </button>
+           ) : (!isCreator && !data.is_verified) ? (
+             <button onClick={handleClaim} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-xs font-bold active:scale-95">
+               <ShieldCheck size={14}/> 认领该店
+             </button>
+           ) : null}
+        </div>
 
-       {/* Profile Info */}
-       <div className="px-1 space-y-4">
-          <div className="flex justify-between items-start">
+        {/* ====== EDIT MODE ====== */}
+        {isEditing ? (
+          <div className="space-y-3 glass-card p-4 border border-blue-500/30">
+             <p className="text-xs font-bold text-blue-500 mb-2">修改店铺信息 (仅老板可见)</p>
              <div>
-                <h2 className="text-xl font-black text-tg-text flex items-center gap-2">
-                   {data.name} 
-                   {data.is_verified && <CheckCircle className="text-blue-500" size={18} fill="currentColor" color="white" />}
-                </h2>
-                <div className="flex items-center gap-2 mt-1">
-                   <span className="text-xs font-bold text-tg-link">{data.category}</span>
-                </div>
+               <label className="text-xs text-tg-hint font-bold">详细地址</label>
+               <input type="text" value={editForm.address} onChange={e => setEditForm({...editForm, address: e.target.value})} className="tg-input py-2 mt-1" />
              </div>
-             {isCreator && !isEditing ? (
-               <button 
-                 onClick={() => setIsEditing(true)}
-                 className="p-2 bg-blue-500/10 text-blue-500 rounded-xl"
-               >
-                 <Edit3 size={16} />
+             <div className="aspect-[16/10] rounded-xl overflow-hidden my-3 border border-black/10 shadow-inner">
+                <LocationPicker geo={editForm.geo} onChange={(geo) => setEditForm({ ...editForm, geo })} />
+             </div>
+             <div>
+               <label className="text-xs text-tg-hint font-bold">店铺描述</label>
+               <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="tg-input py-2 mt-1 resize-none h-20" />
+             </div>
+             <div className="pt-3 border-t border-blue-500/20 mt-3">
+               <p className="text-xs font-bold text-amber-500 mb-2.5 flex items-center gap-1.5"><Ticket size={14}/> 营销中心</p>
+               <div className="flex gap-2">
+                  <div className="flex-[2]">
+                    <label className="text-[10px] text-tg-hint font-bold">福利名称</label>
+                    <input type="text" placeholder="留空则不发放" value={editForm.deal_title} onChange={e => setEditForm({...editForm, deal_title: e.target.value})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] text-tg-hint font-bold">兑换积分</label>
+                    <input type="number" min="0" value={editForm.deal_points} onChange={e => setEditForm({...editForm, deal_points: Math.max(0, parseInt(e.target.value) || 0)})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
+                  </div>
+               </div>
+             </div>
+             {!data.is_sponsored && (
+               <button onClick={handleBoost} type="button" className="w-full mt-3 py-3 rounded-xl border border-rose-500/30 text-rose-500 bg-rose-500/5 font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95">
+                 <Zap size={16} /> 消耗 1000 积分首页置顶
                </button>
-             ) : (!isCreator && !data.is_verified) ? (
-               <button onClick={handleClaim} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-xs font-bold active:scale-95 shadow-sm">
-                 <ShieldCheck size={14}/> 认领该店
+             )}
+             <div className="flex gap-2 mt-4 pt-3 border-t border-blue-500/20">
+               <button onClick={() => setIsEditing(false)} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-600 font-bold text-sm active:scale-95" style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color)' }}>取消</button>
+               <button onClick={saveEdits} disabled={submitting} className="flex-[2] py-2.5 rounded-xl bg-blue-500 text-white font-bold text-sm flex justify-center items-center gap-2 shadow-md shadow-blue-500/20 active:scale-95">
+                 {submitting ? <Loader2 size={16} className="animate-spin" /> : '确认发布'}
                </button>
-             ) : null}
+             </div>
           </div>
+        ) : (
+          <div className="space-y-4">
 
-          {/* Location & Description */}
-          {isEditing ? (
-            <div className="space-y-3 glass-card p-4 border border-blue-500/30">
-               <p className="text-xs font-bold text-blue-500 mb-2">修改店铺信息 (仅老板可见)</p>
-               <div>
-                 <label className="text-xs text-tg-hint font-bold">详细地址</label>
-                 <input 
-                   type="text" 
-                   value={editForm.address} 
-                   onChange={e => setEditForm({...editForm, address: e.target.value})} 
-                   className="tg-input py-2 mt-1" 
-                 />
-               </div>
-               <div className="aspect-[16/10] rounded-xl overflow-hidden my-3 border border-black/10 shadow-inner">
-                  <LocationPicker 
-                    geo={editForm.geo} 
-                    onChange={(geo) => setEditForm({ ...editForm, geo })}
-                  />
-               </div>
-               <div>
-                 <label className="text-xs text-tg-hint font-bold">店铺描述</label>
-                 <textarea 
-                   value={editForm.description} 
-                   onChange={e => setEditForm({...editForm, description: e.target.value})} 
-                   className="tg-input py-2 mt-1 resize-none h-20" 
-                 />
-               </div>
+            {/* ① 商户简介 */}
+            {data.description && (
+              <div className="glass-card p-4">
+                 <p className="text-[10px] font-black text-tg-hint uppercase tracking-widest mb-2">商户简介</p>
+                 <p className="text-sm text-tg-text leading-relaxed whitespace-pre-wrap">{data.description}</p>
+              </div>
+            )}
 
-               {/* 营销增值模块 */}
-               <div className="pt-3 border-t border-blue-500/20 mt-3">
-                 <p className="text-xs font-bold text-amber-500 mb-2.5 flex items-center gap-1.5"><Ticket size={14}/> 营销中心：发放引流获客券</p>
-                 <div className="flex gap-2">
-                    <div className="flex-[2]">
-                      <label className="text-[10px] text-tg-hint font-bold">福利名称 (如: 5折咖啡券)</label>
-                      <input type="text" placeholder="留空则不发放" value={editForm.deal_title} onChange={e => setEditForm({...editForm, deal_title: e.target.value})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
+            {/* ② 联系方式 & 链接 */}
+            <div className="glass-card p-4 space-y-0">
+               <p className="text-[10px] font-black text-tg-hint uppercase tracking-widest mb-3">联系方式</p>
+               
+               {data.owner_tg_id && (
+                 <div className="flex items-center justify-between py-3">
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                          <MessageCircle size={18} />
+                       </div>
+                       <div>
+                          <p className="text-xs font-black text-tg-text">老板 Telegram</p>
+                          <p className="text-[11px] text-tg-link font-medium">t.me/{data.owner_tg_id}</p>
+                       </div>
                     </div>
-                    <div className="flex-1">
-                      <label className="text-[10px] text-tg-hint font-bold">单份兑换(积分)</label>
-                      <input type="number" min="0" value={editForm.deal_points} onChange={e => setEditForm({...editForm, deal_points: Math.max(0, parseInt(e.target.value) || 0)})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
-                    </div>
+                    <button onClick={handleContact} className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1.5">
+                      <MessageCircle size={13} /> 私聊
+                    </button>
                  </div>
-               </div>
-
-               {!data.is_sponsored && (
-                 <button onClick={handleBoost} type="button" className="w-full mt-3 py-3 rounded-xl border border-rose-500/30 text-rose-500 bg-rose-500/5 font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all">
-                   <Zap size={16} /> 消耗 1000 积分将店铺在首页置顶
-                 </button>
                )}
 
-               <div className="flex gap-2 mt-4 pt-3 border-t border-blue-500/20">
-                 <button 
-                   onClick={() => setIsEditing(false)} 
-                   className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-600 font-bold text-sm active:scale-95 transition-all"
-                   style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color)' }}
-                 >
-                   取消
-                 </button>
-                 <button 
-                   onClick={saveEdits} 
-                   disabled={submitting}
-                   className="flex-[2] py-2.5 rounded-xl bg-blue-500 text-white font-bold text-sm flex justify-center items-center gap-2 shadow-md shadow-blue-500/20 active:scale-95 transition-all"
-                 >
-                   {submitting ? <Loader2 size={16} className="animate-spin" /> : '确认发布'}
-                 </button>
-               </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="p-3.5 glass-card space-y-3">
-                 <div className="flex items-start gap-3.5">
-                   <div className="p-2.5 bg-rose-500/10 rounded-xl text-rose-500">
-                      <MapPin size={18} />
-                   </div>
-                   <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-bold text-tg-hint">商户地址</p>
-                      <p className="text-sm font-bold text-tg-text pr-2 leading-tight">{data.physical_address}</p>
-                   </div>
-                 </div>
-                 <div className="aspect-[21/9] rounded-xl overflow-hidden border border-black/5 opacity-80 pointer-events-none">
-                    <LocationPicker 
-                      geo={{ lat: data.lat, lng: data.lng }} 
-                      readonly={true}
-                    />
-                 </div>
-                 {/* 社交主页链接 (Homepage URL) */}
-                 {data.homepage_url && (
-                    <div className="flex items-center gap-2 pt-2 border-t border-black/5 mt-2">
-                       <a href={data.homepage_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[13px] font-bold active:scale-95 transition-transform truncate max-w-[85%]">
-                         <LinkIcon size={14} className="flex-shrink-0" />
-                         <span className="truncate">{data.homepage_url.replace(/^https?:\/\//, '')}</span>
-                       </a>
+               {data.homepage_url && (
+                 <div className={clsx("flex items-center justify-between py-3", data.owner_tg_id && "border-t border-black/5")}>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-400 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                          <LinkIcon size={18} />
+                       </div>
+                       <div className="min-w-0">
+                          <p className="text-xs font-black text-tg-text">主页 / 社媒</p>
+                          <p className="text-[11px] text-tg-link font-medium truncate max-w-[180px]">{data.homepage_url.replace(/^https?:\/\//, '')}</p>
+                       </div>
                     </div>
-                 )}
-                 {/* 动态标签 (Tags) 用户打卡和+1 */}
-                 {tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-black/5 mt-2 w-full">
-                       {tags.map(tag => (
-                          <button 
-                            key={tag.name}
-                            onClick={() => handleUpvoteTag(tag)}
-                            disabled={tag.votedByMe}
-                            className={clsx(
-                              "px-2.5 py-1 rounded-xl border font-bold text-xs flex items-center gap-1 transition-all",
-                              tag.votedByMe ? "bg-amber-100 border-amber-200 text-amber-600 shadow-sm" : "bg-white border-black/5 text-tg-hint active:scale-95 hover:bg-gray-50 active:bg-gray-100"
-                            )}
-                          >
-                            <span>{tag.name}</span>
-                            <span className={clsx("px-1.5 py-0.5 rounded-lg text-[9px] font-black", tag.votedByMe ? "bg-amber-200/60" : "bg-gray-100")}>
-                               +{tag.count}
-                            </span>
-                          </button>
-                       ))}
-                    </div>
-                 )}
-                 {data.description && (
-                   <div className="pt-2 border-t border-black/5">
-                     <p className="text-sm text-tg-text leading-relaxed whitespace-pre-wrap">{data.description}</p>
-                   </div>
-                 )}
-              </div>
-              
-              {/* O2O 变现核心区 - Deal / Coupon Card */}
-              {data.deal_title && (
-                <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-lg shadow-orange-500/20 text-white flex justify-between items-center relative overflow-hidden transform active:scale-[0.98] transition-transform">
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl z-0" />
-                   <div className="z-10 flex-1 pr-4">
-                      <div className="flex items-center gap-1.5 text-white/90 text-[10px] font-bold mb-1 opacity-90"><Ticket size={14} /> 粉丝专属特供福利</div>
-                      <p className="text-lg font-black leading-tight drop-shadow-sm">{data.deal_title}</p>
-                      <p className="text-xs font-bold mt-1 text-white/90 bg-black/10 inline-block px-2 py-0.5 rounded pl-1">💎 兑换需 {data.deal_points} 积分</p>
-                   </div>
-                   <button onClick={handleBuyDeal} disabled={submitting} className="z-10 flex-shrink-0 px-4 py-2 bg-white text-orange-500 rounded-xl font-black text-sm shadow-sm active:scale-90 transition-transform disabled:opacity-50 tracking-wide">
-                      抢名额
-                   </button>
-                </div>
-              )}
-            </div>
-          )}
+                    <a href={data.homepage_url} target="_blank" rel="noreferrer" className="px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex-shrink-0">
+                      打开
+                    </a>
+                 </div>
+               )}
 
-         {/* Contact Boss Button */}
-         {data.owner_tg_id && (
-           <button 
-             onClick={handleContact}
-             className="tg-button py-3.5 flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-500 to-blue-600 shadow-blue-500/20"
-           >
-              <MessageCircle size={18} />
-              联系老板
-           </button>
-         )}
+               {!data.owner_tg_id && !data.homepage_url && (
+                  <p className="text-xs text-tg-hint italic text-center py-3">暂未提供联系方式</p>
+               )}
+            </div>
+
+            {/* ③ 标签 */}
+            {tags.length > 0 && (
+              <div className="glass-card p-4">
+                 <p className="text-[10px] font-black text-tg-hint uppercase tracking-widest mb-3">用户标签 · 点击认同 +1</p>
+                 <div className="flex flex-wrap gap-2">
+                    {tags.map(tag => (
+                       <button 
+                         key={tag.name}
+                         onClick={() => handleUpvoteTag(tag)}
+                         disabled={tag.votedByMe}
+                         className={clsx(
+                           "px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all",
+                           tag.votedByMe ? "bg-amber-50 border-amber-200 text-amber-600 shadow-sm" : "bg-white border-black/5 text-tg-hint active:scale-95 hover:bg-gray-50"
+                         )}
+                       >
+                         <span>{tag.name}</span>
+                         <span className={clsx("px-1.5 py-0.5 rounded-md text-[9px] font-black", tag.votedByMe ? "bg-amber-200/60" : "bg-gray-100")}>+{tag.count}</span>
+                       </button>
+                    ))}
+                 </div>
+              </div>
+            )}
+
+            {/* ④ 地址 & 地图 */}
+            <div className="glass-card p-4 space-y-3">
+               <p className="text-[10px] font-black text-tg-hint uppercase tracking-widest mb-1">详细地址</p>
+               <div className="flex items-start gap-3">
+                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-pink-400 flex items-center justify-center text-white shadow-sm flex-shrink-0 mt-0.5">
+                    <MapPin size={18} />
+                 </div>
+                 <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-tg-text leading-snug">{data.physical_address || '暂无详细地址'}</p>
+                    {data.lat && data.lng && (
+                       <p className="text-[10px] text-tg-hint mt-1 font-mono opacity-60">{Number(data.lat).toFixed(4)}, {Number(data.lng).toFixed(4)}</p>
+                    )}
+                 </div>
+               </div>
+               {data.lat && data.lng && (
+                 <div className="aspect-[21/9] rounded-xl overflow-hidden border border-black/5 opacity-90 pointer-events-none shadow-inner">
+                    <LocationPicker geo={{ lat: data.lat, lng: data.lng }} readonly={true} />
+                 </div>
+               )}
+            </div>
+
+            {/* ⑤ 福利券 */}
+            {data.deal_title && (
+              <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-lg shadow-orange-500/20 text-white flex justify-between items-center relative overflow-hidden active:scale-[0.98] transition-transform">
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl z-0" />
+                 <div className="z-10 flex-1 pr-4">
+                    <div className="flex items-center gap-1.5 text-white/90 text-[10px] font-bold mb-1 opacity-90"><Ticket size={14} /> 粉丝专属福利</div>
+                    <p className="text-lg font-black leading-tight drop-shadow-sm">{data.deal_title}</p>
+                    <p className="text-xs font-bold mt-1 text-white/90 bg-black/10 inline-block px-2 py-0.5 rounded">💎 兑换需 {data.deal_points} 积分</p>
+                 </div>
+                 <button onClick={handleBuyDeal} disabled={submitting} className="z-10 flex-shrink-0 px-4 py-2 bg-white text-orange-500 rounded-xl font-black text-sm shadow-sm active:scale-90 transition-transform disabled:opacity-50">
+                    抢名额
+                 </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <hr className="border-black/5 mx-1 my-5" />
 
-      {/* Reviews Section */}
+      {/* ====== Reviews Section ====== */}
       <div className="px-1 space-y-4">
         <h3 className="text-lg font-black text-tg-text">商户评价 <span className="text-tg-hint text-sm font-normal">({reviews.length})</span></h3>
         
-        {/* Write Review */}
         <div className="flex gap-2 mb-4">
           <input 
-            type="text" 
-            placeholder="写下你的评价..." 
-            value={newReview}
+            type="text" placeholder="写下你的评价..." value={newReview}
             onChange={e => setNewReview(e.target.value)}
             className="tg-input py-2.5 flex-1 bg-gray-100"
             style={{ backgroundColor: 'var(--tg-theme-secondary-bg-color)' }}
           />
-          <button 
-            onClick={submitReview}
-            disabled={submitting || !newReview.trim()}
-            className="w-11 h-11 bg-blue-500 rounded-xl flex items-center justify-center text-white disabled:opacity-50 active:scale-95"
-          >
+          <button onClick={submitReview} disabled={submitting || !newReview.trim()} className="w-11 h-11 bg-blue-500 rounded-xl flex items-center justify-center text-white disabled:opacity-50 active:scale-95">
             {submitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </button>
         </div>
 
-        {/* Reviews List */}
         <div className="space-y-3">
           {reviews.map(review => (
             <div key={review.id} className="p-4 glass-card">

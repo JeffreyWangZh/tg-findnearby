@@ -5,6 +5,51 @@ import clsx from 'clsx';
 import { supabase } from '../lib/supabase';
 
 import { FALLBACK_IMAGES } from '../utils/telegram';
+import { useRef } from 'react';
+
+function MerchantImageCarousel({ images }) {
+  const scrollRef = useRef(null);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const interval = setInterval(() => {
+      if (scrollRef.current) {
+        const nextIdx = (index + 1) % images.length;
+        const width = scrollRef.current.offsetWidth;
+        scrollRef.current.scrollTo({ left: nextIdx * width, behavior: 'smooth' });
+        setIndex(nextIdx);
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [images, index]);
+
+  return (
+    <div className="w-full h-full relative group overflow-hidden">
+      <div 
+        ref={scrollRef}
+        className="flex w-full h-full overflow-x-auto snap-x snap-mandatory no-scrollbar" 
+        style={{ scrollBehavior: 'smooth' }}
+        onScroll={(e) => {
+           const idx = Math.round(e.target.scrollLeft / e.target.offsetWidth);
+           if (idx !== index) setIndex(idx);
+        }}
+      >
+        {images.map((img, i) => (
+          <img key={i} src={img} className="w-full h-full object-cover flex-shrink-0 snap-center" />
+        ))}
+      </div>
+      
+      {images.length > 1 && (
+        <div className="absolute top-3 right-3 flex gap-1 z-10 bg-black/40 px-1.5 py-1 rounded-full backdrop-blur-md">
+           {images.map((_, i) => (
+             <div key={i} className={clsx("w-1.5 h-1.5 rounded-full transition-all", i === index ? "bg-white w-3" : "bg-white/40")} />
+           ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ExploreTab({ currentGeo, collections, setTag, onAddClick, onMerchantClick }) {
   const FILTERS = ['全部', '最新探店', '品牌认领', '活动精选'];
@@ -232,6 +277,13 @@ export default function ExploreTab({ currentGeo, collections, setTag, onAddClick
               }
             } catch (e) { }
 
+            // Debug: log what we got
+            if (images.length > 0) {
+              console.log(`[Carousel] ${merchant.name}: ${images.length} images`, images);
+            } else {
+              console.log(`[Carousel] ${merchant.name}: NO images, media_urls =`, merchant.media_urls, '→ using fallback');
+            }
+
             if (images.length === 0) {
                images = [FALLBACK_IMAGES[merchant.category] || FALLBACK_IMAGES['默认']];
             }
@@ -245,19 +297,7 @@ export default function ExploreTab({ currentGeo, collections, setTag, onAddClick
                 onClick={() => onMerchantClick(merchant)}
               >
                 <div className="w-full aspect-[2/1] bg-gray-100 relative group overflow-hidden">
-                  <div className="flex w-full h-full overflow-x-auto snap-x snap-mandatory no-scrollbar" style={{ scrollBehavior: 'smooth' }}>
-                     {images.map((img, i) => (
-                       <img key={i} src={img} className="w-full h-full object-cover flex-shrink-0 snap-center" />
-                     ))}
-                  </div>
-                  
-                  {images.length > 1 && (
-                     <div className="absolute top-3 right-3 flex gap-1 z-10 bg-black/40 px-1.5 py-1 rounded-full backdrop-blur-md">
-                        {images.map((_, i) => (
-                          <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/80" />
-                        ))}
-                     </div>
-                  )}
+                  <MerchantImageCarousel images={images} />
 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
                   <div className="absolute bottom-3 left-3 flex gap-2 pointer-events-none">
