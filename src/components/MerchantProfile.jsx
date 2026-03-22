@@ -71,7 +71,7 @@ export default function MerchantProfile({ merchant, onBack }) {
     if (!newReview.trim()) return;
     setSubmitting(true);
     
-    // 模拟积分奖励
+    // 模拟积分奖励 5-10
     const rewardPoints = Math.floor(Math.random() * 5) + 5;
 
     const { error } = await supabase
@@ -84,11 +84,18 @@ export default function MerchantProfile({ merchant, onBack }) {
       });
 
     if (!error) {
+      // 记录积分历史
+      await supabase.from('points_history').insert({
+        tg_user_id: currentUser.id,
+        action: `发布评价 - ${data.name.substring(0, 10)}`,
+        points: rewardPoints
+      });
+
       setNewReview('');
       fetchReviews();
       WebApp.showPopup({
          title: '🌟 评价发布成功',
-         message: `感谢您的分享！系统赠送了 ${rewardPoints} 积分作为奖励！`,
+         message: `感谢您的分享！系统赠送了 ${rewardPoints} 积分！\n可在【我的】中查看明细。`,
          buttons: [{ type: 'ok', text: '收下积分' }]
       });
     }

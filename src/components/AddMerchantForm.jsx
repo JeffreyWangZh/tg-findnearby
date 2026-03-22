@@ -103,9 +103,16 @@ export default function AddMerchantForm({ onFinish }) {
 
         if (error) throw error;
 
+        // 记录积分
+        await supabase.from('points_history').insert({
+          tg_user_id: currentUser.id,
+          action: `推荐新店 - ${formData.name.substring(0, 10)}`,
+          points: 20
+        });
+
         WebApp.showPopup({ 
           title: '提交成功 🎉', 
-          message: '商户已被收录，即将可以在发现页查看。',
+          message: '商户已被收录，即将可以在发现页查看。\n奖励 20 积分将自动发放！',
           buttons: [{ type: 'ok', text: '好的' }]
         });
         onFinish();
