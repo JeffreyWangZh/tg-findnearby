@@ -275,7 +275,7 @@ export default function MerchantProfile({ merchant, onBack }) {
                     </div>
                     <div className="flex-1">
                       <label className="text-[10px] text-tg-hint font-bold">单份兑换(积分)</label>
-                      <input type="number" min="0" value={editForm.deal_points} onChange={e => setEditForm({...editForm, deal_points: parseInt(e.target.value) || 0})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
+                      <input type="number" min="0" value={editForm.deal_points} onChange={e => setEditForm({...editForm, deal_points: Math.max(0, parseInt(e.target.value) || 0)})} className="tg-input py-2 mt-1 w-full text-xs bg-amber-50/50" />
                     </div>
                  </div>
                </div>
