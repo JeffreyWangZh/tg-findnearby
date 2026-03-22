@@ -4,17 +4,7 @@ import { MapPin, Target, CheckCircle2, Loader2, Star, Target as TargetIcon } fro
 import clsx from 'clsx';
 import { supabase } from '../lib/supabase';
 
-// 根据不同类目设定默认占位图
-const FALLBACK_IMAGES = {
-  '餐饮美食': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=300&fit=crop',
-  '咖啡茶饮': 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=600&h=300&fit=crop',
-  '零售购物': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=300&fit=crop',
-  '生活服务': 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=600&h=300&fit=crop',
-  '美容健身': 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=600&h=300&fit=crop',
-  '教育培训': 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600&h=300&fit=crop',
-  '科技互联': 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=600&h=300&fit=crop',
-  '默认': 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=300&fit=crop'
-};
+import { FALLBACK_IMAGES } from '../utils/telegram';
 
 export default function ExploreTab({ collections, setTag, onAddClick, onMerchantClick }) {
   const [merchants, setMerchants] = useState([]);
@@ -87,7 +77,18 @@ export default function ExploreTab({ collections, setTag, onAddClick, onMerchant
         ) : (
           merchants.map((merchant) => {
             const currentTag = collections[merchant.id]?.tag;
-            const imageUrl = merchant.media_urls?.[0]?.url || FALLBACK_IMAGES[merchant.category] || FALLBACK_IMAGES['默认'];
+            
+            // 安全解析可能会被当做字符串加载的 JSONB
+            let imageUrl = null;
+            try {
+              let media = merchant.media_urls;
+              if (typeof media === 'string') media = JSON.parse(media);
+              if (Array.isArray(media) && media.length > 0) {
+                imageUrl = media[0]?.url || media[0];
+              }
+            } catch (e) {}
+            
+            imageUrl = imageUrl || FALLBACK_IMAGES[merchant.category] || FALLBACK_IMAGES['默认'];
 
             return (
               <motion.div 

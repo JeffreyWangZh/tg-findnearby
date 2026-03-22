@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, CheckCircle2, Navigation, MessageCircle, ImageIcon, Coins, Plus, Calendar, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import { supabase } from '../lib/supabase';
-import { getCurrentTgUser, contactMerchantOwner } from '../utils/telegram';
+import { getCurrentTgUser, contactMerchantOwner, FALLBACK_IMAGES } from '../utils/telegram';
 
 const TABS = [
   { id: '待打卡', label: '待打卡', icon: Navigation, col: 'text-amber-500', bg: 'bg-amber-500' },
@@ -158,7 +158,16 @@ export default function UserProfile({ collections, setTag }) {
                 <p className="text-xs mt-1">去发现页逛逛吧</p>
               </motion.div>
             ) : (
-              filteredItems.map(item => (
+              filteredItems.map((item) => {
+                let imageUrl = null;
+                try {
+                  let media = item.media_urls;
+                  if (typeof media === 'string') media = JSON.parse(media);
+                  if (Array.isArray(media) && media.length > 0) imageUrl = media[0]?.url || media[0];
+                } catch (e) {}
+                imageUrl = imageUrl || FALLBACK_IMAGES[item.category] || FALLBACK_IMAGES['默认'];
+
+                return (
                 <motion.div
                   layout
                   initial={{ opacity: 0, y: 10 }}
@@ -170,13 +179,7 @@ export default function UserProfile({ collections, setTag }) {
                   <div className="flex items-start gap-3">
                     {/* Thumbnail */}
                     <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 flex-shrink-0 relative border border-black/5">
-                      {item.media_urls?.[0]?.url ? (
-                        <img src={item.media_urls[0].url} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <ImageIcon size={20} />
-                        </div>
-                      )}
+                      <img src={imageUrl} className="w-full h-full object-cover" />
                     </div>
 
                     {/* Info */}
@@ -214,7 +217,8 @@ export default function UserProfile({ collections, setTag }) {
                     </div>
                   </div>
                 </motion.div>
-              ))
+                );
+              })
             )
           )}
         </AnimatePresence>

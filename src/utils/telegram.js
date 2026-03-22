@@ -41,6 +41,16 @@ export const contactMerchantOwner = (ownerPath) => {
   WebApp.openTelegramLink(targetUrl);
 };
 
+export const FALLBACK_IMAGES = {
+  '餐饮美食': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=300&fit=crop',
+  '咖啡茶饮': 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=600&h=300&fit=crop',
+  '零售购物': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=300&fit=crop',
+  '生活服务': 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=600&h=300&fit=crop',
+  '美容健身': 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=600&h=300&fit=crop',
+  '教育培训': 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600&h=300&fit=crop',
+  '科技互联': 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=600&h=300&fit=crop',
+  '默认': 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=300&fit=crop'
+};
 /**
  * 前端图片压缩（上传前节省带宽）
  */
