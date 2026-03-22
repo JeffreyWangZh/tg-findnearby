@@ -53,25 +53,46 @@ export default function MerchantProfile({ merchant, onBack }) {
     });
   };
 
-  const handleBoost = async () => {
-    WebApp.showConfirm("消耗 1000 积分将店铺置顶至首页精选，确认操作？", async (ok) => {
+  const checkBalanceAndProceed = async (cost, actionName, performAction) => {
+    WebApp.showConfirm(`将消耗 ${cost} 积分执行 [${actionName}]，确认操作吗？`, async (ok) => {
       if (!ok) return;
+      
       setSubmitting(true);
+      // 实时的交易防击穿校验
+      const { data: pts } = await supabase.from('points_history').select('points').eq('tg_user_id', currentUser.id);
+      const currentBalance = (pts || []).reduce((acc, curr) => acc + curr.points, 0);
+      
+      if (currentBalance < cost) {
+        setSubmitting(false);
+        WebApp.showConfirm(`您的积分不足可怜 (余额: ${currentBalance} / 需要: ${cost})\n\n[测试环境特权] 是否要免费模拟 Telegram Stars 充值 5000 积分？`, async (rechargeOk) => {
+          if (rechargeOk) {
+            WebApp.HapticFeedback.impactOccurred('medium');
+            await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: '模拟代币充值 (Telegram Stars)', points: 5000 });
+            WebApp.showPopup({ title: '💎 到账成功', message: '测试充值 5000 积分已发放，请再次点击操作！' });
+          }
+        });
+        return;
+      }
+
+      await performAction();
+      setSubmitting(false);
+    });
+  };
+
+  const handleBoost = () => {
+    checkBalanceAndProceed(1000, "置顶至首页精选", async () => {
       await supabase.from('points_history').insert({
         tg_user_id: currentUser.id, action: `购买首页爆量精选曝光`, points: -1000
       });
       await supabase.from('merchants').update({ is_sponsored: true }).eq('id', data.id);
       setData({...data, is_sponsored: true});
-      setSubmitting(false);
       WebApp.HapticFeedback.notificationOccurred('success');
-      WebApp.showPopup({ title: '👑 置顶成功', message: '您的店铺已被置顶展示！' });
+      WebApp.showPopup({ title: '👑 置顶成功', message: '交易达成！您的店铺已置顶。' });
     });
   };
 
   const handleClaim = () => {
-    WebApp.showConfirm("需支付 500 积分认证成为官方蓝V老板，开启专属营销权限全功能，是否确认？", async (ok) => {
-      if (!ok) return;
-      setSubmitting(true);
+    checkBalanceAndProceed(500, "认证为官方蓝V老板", async () => {
       await supabase.from('points_history').insert({
         tg_user_id: currentUser.id, action: `官方认证蓝V - ${data.name}`, points: -500
       });
@@ -80,22 +101,18 @@ export default function MerchantProfile({ merchant, onBack }) {
         submitter_tg_id: currentUser.id
       }).eq('id', data.id);
       setData({...data, is_verified: true, submitter_tg_id: currentUser.id});
-      setSubmitting(false);
       WebApp.HapticFeedback.notificationOccurred('success');
-      WebApp.showPopup({ title: '💎 认领成功', message: '您现在享有该店的完全编辑与营销配置权限！' });
+      WebApp.showPopup({ title: '💎 认领成功', message: '商铺已绑定您的账号！' });
     });
   };
 
   const handleBuyDeal = () => {
-    WebApp.showConfirm(`将扣除 ${data.deal_points} 积分抢购 [${data.deal_title}]，不可退换。确认兑换？`, async (ok) => {
-      if (!ok) return;
-      setSubmitting(true);
+    checkBalanceAndProceed(data.deal_points, `抢购: ${data.deal_title}`, async () => {
       await supabase.from('points_history').insert({
-        tg_user_id: currentUser.id, action: `购买特权 - ${data.deal_title}`, points: -data.deal_points
+        tg_user_id: currentUser.id, action: `抢购营销特卖 - ${data.deal_title}`, points: -data.deal_points
       });
-      setSubmitting(false);
       WebApp.HapticFeedback.notificationOccurred('success');
-      WebApp.showPopup({ title: '🎉 兑换成功', message: `请向商家出示此购买记录以核销 ${data.deal_title}` });
+      WebApp.showPopup({ title: '🎉 兑换成功', message: `请向商家出示此购买明细以核销。` });
     });
   };
 

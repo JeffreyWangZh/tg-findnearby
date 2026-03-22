@@ -61,9 +61,20 @@ export default function UserProfile({ collections, setTag }) {
         <div className="flex-1 relative z-10">
           <h2 className="text-xl font-black text-tg-text">{currentUser.username}</h2>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs font-bold px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-full flex items-center gap-1">
-              <Coins size={12} /> {activeTab === '积分' ? totalPoints : '查看总'} 积分
-            </span>
+            <button 
+              onClick={() => {
+                WebApp.showConfirm('是否使用测试通道免费充值 5000 积分？', async (ok) => {
+                  if(ok) {
+                    await supabase.from('points_history').insert({ tg_user_id: currentUser.id, action: '模拟内购', points: 5000 });
+                    if (activeTab === '积分') fetchPoints(); 
+                    else setActiveTab('积分');
+                  }
+                })
+              }}
+              className="text-xs font-bold px-2 py-0.5 bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white transition-all rounded-full flex items-center gap-1 active:scale-95"
+            >
+              <Coins size={12} /> {activeTab === '积分' ? totalPoints : '查看总'} 积分 <Plus size={10}/>
+            </button>
             <span className="text-xs text-tg-hint font-medium">收藏了 {items.length} 个好店</span>
           </div>
         </div>
